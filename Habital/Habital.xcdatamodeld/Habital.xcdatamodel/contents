@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24299" systemVersion="25B5042k" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="YES" userDefinedModelVersionIdentifier="">
+    <entity name="Completion" representedClassName="Completion" syncable="YES" codeGenerationType="class">
+        <attribute name="completed" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="date" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="dayKey" optional="YES" attributeType="String"/>
+        <attribute name="duration" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="loggedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="moodImpact" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="notes" optional="YES" attributeType="String"/>
+        <attribute name="perceivedDifficulty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="progressPercentage" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="quantity" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="selfEfficacy" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="skipped" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="tracksTime" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <relationship name="habit" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Habit" inverseName="completion" inverseEntity="Habit"/>
+    </entity>
+    <entity name="DailyGoal" representedClassName="DailyGoal" syncable="YES" codeGenerationType="class">
+        <attribute name="daysInterval" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="everyDay" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="specificDays" optional="YES" attributeType="Transformable"/>
+        <relationship name="repeatPattern" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="RepeatPattern" inverseName="dailyGoal" inverseEntity="RepeatPattern"/>
+    </entity>
+    <entity name="Entity" representedClassName="Entity" syncable="YES" codeGenerationType="class"/>
+    <entity name="Habit" representedClassName="Habit" syncable="YES" codeGenerationType="class">
+        <attribute name="bestStreakEver" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="color" optional="YES" attributeType="Binary"/>
+        <attribute name="habitDescription" optional="YES" attributeType="String"/>
+        <attribute name="icon" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="intensityLevel" optional="YES" attributeType="Integer 16" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="isArchived" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="isBadHabit" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="lastCompletionDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="moodImpact" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="order" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="startDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="totalCompletions" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="category" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="HabitCategory" inverseName="habit" inverseEntity="HabitCategory"/>
+        <relationship name="completion" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Completion" inverseName="habit" inverseEntity="Completion"/>
+        <relationship name="habitList" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="HabitList" inverseName="habits" inverseEntity="HabitList"/>
+        <relationship name="notification" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Notification" inverseName="habit" inverseEntity="Notification"/>
+        <relationship name="repeatPattern" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="RepeatPattern" inverseName="habit" inverseEntity="RepeatPattern"/>
+    </entity>
+    <entity name="HabitCategory" representedClassName="HabitCategory" syncable="YES" codeGenerationType="class">
+        <attribute name="color" optional="YES" attributeType="Binary"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="icon" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isDefault" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="order" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="habit" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Habit" inverseName="category" inverseEntity="Habit"/>
+    </entity>
+    <entity name="HabitList" representedClassName="HabitList" syncable="YES" codeGenerationType="class">
+        <attribute name="color" optional="YES" attributeType="Binary"/>
+        <attribute name="icon" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="order" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="habits" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Habit" inverseName="habitList" inverseEntity="Habit"/>
+    </entity>
+    <entity name="HealthLink" representedClassName="HealthLink" syncable="YES" codeGenerationType="class">
+        <attribute name="comparison" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isEnabled" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="metricRaw" optional="YES" attributeType="String"/>
+        <attribute name="smoothingDays" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="threshold" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="unitRaw" optional="YES" attributeType="String"/>
+    </entity>
+    <entity name="Item" representedClassName="Item" syncable="YES" codeGenerationType="class">
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="MonthlyGoal" representedClassName="MonthlyGoal" syncable="YES" codeGenerationType="class">
+        <attribute name="everyMonth" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="monthInterval" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="specificDays" optional="YES" attributeType="Transformable"/>
+        <relationship name="repeatPattern" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="RepeatPattern" inverseName="monthlyGoal" inverseEntity="RepeatPattern"/>
+    </entity>
+    <entity name="Notification" representedClassName="Notification" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="notes" optional="YES" attributeType="String"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="habit" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Habit" inverseName="notification" inverseEntity="Habit"/>
+    </entity>
+    <entity name="RepeatPattern" representedClassName="RepeatPattern" syncable="YES" codeGenerationType="class">
+        <attribute name="creationDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="duration" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="effectiveFrom" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="followUp" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="quantityUnit" optional="YES" attributeType="String"/>
+        <attribute name="repeatsPerDay" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="targetQuantity" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="targetUnit" optional="YES" attributeType="String"/>
+        <attribute name="trackingType" optional="YES" attributeType="String"/>
+        <relationship name="dailyGoal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DailyGoal" inverseName="repeatPattern" inverseEntity="DailyGoal"/>
+        <relationship name="habit" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Habit" inverseName="repeatPattern" inverseEntity="Habit"/>
+        <relationship name="monthlyGoal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="MonthlyGoal" inverseName="repeatPattern" inverseEntity="MonthlyGoal"/>
+        <relationship name="weeklyGoal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="WeeklyGoal" inverseName="repeatPattern" inverseEntity="WeeklyGoal"/>
+    </entity>
+    <entity name="StreakCache" representedClassName="StreakCache" syncable="YES" codeGenerationType="class">
+        <attribute name="currentCount" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="habitId" optional="YES" attributeType="String"/>
+        <attribute name="isActive" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="lastCalculated" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="lastCompletedDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="longestCount" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="startDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="WeeklyGoal" representedClassName="WeeklyGoal" syncable="YES" codeGenerationType="class">
+        <attribute name="everyWeek" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="specificDays" optional="YES" attributeType="Transformable"/>
+        <attribute name="weekInterval" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="repeatPattern" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="RepeatPattern" inverseName="weeklyGoal" inverseEntity="RepeatPattern"/>
+    </entity>
+</model>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>This app needs to update your health data to record habit completions and track your progress.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>This app needs access to your health data to track habits and provide insights about your wellness goals.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>openai-chatgpt</string>
+		<string>chatgpt</string>
+		<string>com.openai.chat</string>
+	</array>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Lexend-Light.ttf</string>
+		<string>Lexend-Black.ttf</string>
+		<string>Lexend-SemiBold.ttf</string>
+		<string>Lexend-Medium.ttf</string>
+		<string>Lexend-Regular.ttf</string>
+		<string>Lexend-Bold.ttf</string>
+		<string>Quantico-Bold.ttf</string>
+		<string>Quantico-Regular.ttf</string>
+		<string>Roboto-Regular.ttf</string>
+		<string>Roboto-Bold.ttf</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array/>
+</dict>
+</plist>
