@@ -41,6 +41,8 @@ struct HabitGitHubGrid: View {
         let quantityCompleted: Int
         let quantityTarget: Int
         let quantityUnit: String
+        // New: mark if this day belongs to the best (longest) streak
+        let isInBestStreak: Bool
     }
     
     private var habitColor: Color {
@@ -81,13 +83,16 @@ struct HabitGitHubGrid: View {
             return Color.gray.opacity(0.08)
         }
         
+        // Choose base color: opposite color for best streak, habit color otherwise
+        let baseColor: Color = day.isInBestStreak ? oppositeColor(for: habitColor) : habitColor
+        
         // Use completion ratio for varying opacity
         if day.completionRatio > 0 {
             // Map completion ratio to opacity range: 0.2 to 1.0
             let minOpacity = 0.2
             let maxOpacity = 1.0
             let opacity = minOpacity + (day.completionRatio * (maxOpacity - minOpacity))
-            return habitColor.opacity(opacity)
+            return baseColor.opacity(opacity)
         } else {
             return Color.gray.opacity(0.25)
         }
@@ -151,13 +156,27 @@ struct HabitGitHubGrid: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 1) {
             // Header
+            /*
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(habit.name ?? "Habit")
-                        .font(.customFont("Lexend", .bold, 16))
-                    
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 7){
+                        Text(habit.name ?? "Habit")
+                            .font(.customFont("Lexend", .bold, 16))
+                        if let startDate = habit.startDate {
+                            HStack(spacing: 2) {
+                                Image(systemName: "calendar")
+                                    .font(.system(size: 6))
+                                    .foregroundColor(.secondary)
+
+                                Text(formatStartDate(startDate))
+                                    .font(.customFont("Lexend", .regular, 10))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                    }
                     Text(completionText)
                         .font(.customFont("Lexend", .regular, 11))
                         .foregroundColor(.secondary)
@@ -184,7 +203,7 @@ struct HabitGitHubGrid: View {
                 }
                 .frame(width: 30, height: 30)
             }
-            
+            */
             // Grid with day labels
             if isLoading {
                 // Loading placeholder
@@ -220,14 +239,15 @@ struct HabitGitHubGrid: View {
                             }
                         }
                     }
-                    .padding(6)
+                    //.padding(6)
                 }
             } else {
                 HStack(spacing: 2) {
                     VStack(spacing: 2) {
+                        /*
                         Color.clear
                             .frame(width: 25, height: 12)
-                        
+                        */
                         ForEach(0..<7, id: \.self) { dayIndex in
                             Text(dayLabels[dayIndex])
                                 .font(.customFont("Lexend", .regular, 9))
@@ -281,11 +301,29 @@ struct HabitGitHubGrid: View {
                     .defaultScrollAnchor(.trailing)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .padding(.bottom, 8)
             }
             
             // Legend
-            HStack(spacing: 16) {
+            HStack(spacing: 10) {
+                /*
+                if let startDate = habit.startDate {
+                    Text("Since \(formatStartDate(startDate))")
+                        .font(.customFont("Lexend", .regular, 10))
+                        .foregroundColor(.secondary)
+                }
+                 */
+                
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(oppositeColor(for: habitColor))
+                        .frame(width: 10, height: 10)
+                        
+                    Text("Best Streak")
+                        .font(.customFont("Lexend", .regular, 11))
+                        .foregroundColor(.secondary)
+                
+                Spacer()
+                
                 Text("Less")
                     .font(.customFont("Lexend", .regular, 11))
                     .foregroundColor(.secondary)
@@ -302,13 +340,7 @@ struct HabitGitHubGrid: View {
                     .font(.customFont("Lexend", .regular, 11))
                     .foregroundColor(.secondary)
                 
-                Spacer()
                 
-                if let startDate = habit.startDate {
-                    Text("Since \(formatStartDate(startDate))")
-                        .font(.customFont("Lexend", .regular, 9))
-                        .foregroundColor(.secondary)
-                }
             }
         }
         .padding()
@@ -443,7 +475,8 @@ struct HabitGitHubGrid: View {
                         durationTarget: targetDuration,
                         quantityCompleted: 0,
                         quantityTarget: targetQuantity,
-                        quantityUnit: quantityUnit
+                        quantityUnit: quantityUnit,
+                        isInBestStreak: false
                     ))
                     continue
                 }
@@ -500,7 +533,8 @@ struct HabitGitHubGrid: View {
                     durationTarget: targetDuration,
                     quantityCompleted: quantityCompleted,
                     quantityTarget: targetQuantity,
-                    quantityUnit: quantityUnit
+                    quantityUnit: quantityUnit,
+                    isInBestStreak: false
                 ))
             }
             
@@ -524,18 +558,124 @@ struct HabitGitHubGrid: View {
                     durationTarget: targetDuration,
                     quantityCompleted: 0,
                     quantityTarget: targetQuantity,
-                    quantityUnit: quantityUnit
+                    quantityUnit: quantityUnit,
+                    isInBestStreak: false
                 )
             }
             tempData.insert(emptyWeek, at: 0)
         }
         
+        // Compute best (longest) streak based on active+completed consecutive days
+        let bestStreakDates = computeBestStreakDates(from: tempData)
+        
+        // Apply best streak flags
+        let flaggedData: [[DayData]] = tempData.map { week in
+            week.map { day in
+                guard day.date != Date.distantPast else { return day }
+                let normalized = calendar.startOfDay(for: day.date)
+                if bestStreakDates.contains(normalized) {
+                    return DayData(
+                        date: day.date,
+                        isActive: day.isActive,
+                        isCompleted: day.isCompleted,
+                        completionRatio: day.completionRatio,
+                        completionCount: day.completionCount,
+                        requiredCount: day.requiredCount,
+                        isFuture: day.isFuture,
+                        isToday: day.isToday,
+                        trackingType: day.trackingType,
+                        durationCompleted: day.durationCompleted,
+                        durationTarget: day.durationTarget,
+                        quantityCompleted: day.quantityCompleted,
+                        quantityTarget: day.quantityTarget,
+                        quantityUnit: day.quantityUnit,
+                        isInBestStreak: true
+                    )
+                } else {
+                    return day
+                }
+            }
+        }
+        
         return (
-            data: tempData,
+            data: flaggedData,
             totalDays: activeDaysCount,
             completedDays: completedActiveDays,
-            totalWeeks: tempData.count
+            totalWeeks: flaggedData.count
         )
+    }
+    
+    // Helper: compute the best (longest) streak dates from built data
+    private func computeBestStreakDates(from data: [[DayData]]) -> Set<Date> {
+        let calendar = Calendar.current
+        
+        // Flatten to chronological order by date
+        var days: [DayData] = data.flatMap { $0 }
+            .filter { $0.date != Date.distantPast && !$0.isFuture } // ignore placeholders and future
+            .sorted { $0.date < $1.date }
+        
+        var bestStartIndex: Int? = nil
+        var bestLength = 0
+        
+        var currentStartIndex: Int? = nil
+        var currentLength = 0
+        
+        for (idx, day) in days.enumerated() {
+            // Only count streak on active and completed days
+            if day.isActive && day.isCompleted {
+                if currentStartIndex == nil {
+                    currentStartIndex = idx
+                    currentLength = 1
+                } else {
+                    currentLength += 1
+                }
+                
+                if currentLength > bestLength {
+                    bestLength = currentLength
+                    bestStartIndex = currentStartIndex
+                }
+            } else {
+                // Break streak
+                currentStartIndex = nil
+                currentLength = 0
+            }
+        }
+        
+        guard bestLength > 0, let start = bestStartIndex else {
+            return []
+        }
+        
+        let bestSlice = days[start..<(start + bestLength)]
+        let normalizedSet = Set(bestSlice.map { Calendar.current.startOfDay(for: $0.date) })
+        return normalizedSet
+    }
+    
+    // Local opposite color helper: complementary hue (rotate hue by 180°), preserve saturation/brightness/alpha
+    private func oppositeColor(for base: Color) -> Color {
+        // Convert to UIColor
+        let ui = UIColor(base)
+        var h: CGFloat = 0
+        var s: CGFloat = 0
+        var b: CGFloat = 0
+        var a: CGFloat = 0
+        
+        if ui.getHue(&h, saturation: &s, brightness: &b, alpha: &a) {
+            let newH = fmod(h + 0.5, 1.0) // rotate hue by 180°
+            let opposite = UIColor(hue: newH, saturation: s, brightness: b, alpha: a)
+            return Color(opposite)
+        }
+        
+        // Fallback: invert RGB if HSB unavailable
+        var r: CGFloat = 0
+        var g: CGFloat = 0
+        var bl: CGFloat = 0
+        if ui.getRed(&r, green: &g, blue: &bl, alpha: &a) {
+            let opposite = UIColor(red: 1.0 - r, green: 1.0 - g, blue: 1.0 - bl, alpha: a)
+            return Color(opposite)
+        }
+        
+        // Final fallback
+        return base
     }
     
     // Helper methods for tracking types

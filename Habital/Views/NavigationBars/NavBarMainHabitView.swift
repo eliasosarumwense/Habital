@@ -153,7 +153,7 @@ struct EnhancedSpiralDateView: View {
     
     private func formatMonthDay(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "MMM dd"
+        formatter.dateFormat = "MMMM d"
         return formatter.string(from: date)
     }
     
@@ -304,7 +304,7 @@ struct NavBarMainHabitView: View {
                         .transition(titleTransition)
                 }
                 .animation(anim, value: selectedDate)
-                .frame(width: 80)
+                .frame(width: 110)
                 
                 ZStack {
                     Text(subtitleText)

@@ -82,7 +82,6 @@ struct WeekCalendarView: View {
                             isShownInHabitDetails: nil,
                             habitColor: habitColor
                         )
-                        
                         .frame(width: calendarWidth, height: Constants.dayHeight)
                         .onAppear { loadWeek(from: week) }
                     }

@@ -187,28 +187,14 @@ struct CalendarAndToggleView: View {
             Spacer()
             
             // Right side - Today's toggle with modern structure
-            VStack(spacing: 8) {
+            VStack(spacing: 4) {
                 // Toggle button with glass background
                 ZStack {
                     // Modern glass background
                     Circle()
                         .fill(.ultraThinMaterial)
                         .frame(width: 64, height: 64)
-                        .overlay(
-                            Circle()
-                                .strokeBorder(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(colorScheme == .dark ? 0.2 : 0.4),
-                                            habitColor.opacity(0.3),
-                                            Color.clear
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1.5
-                                )
-                        )
+                        
                         //.shadow(color: habitColor.opacity(0.15), radius: 8, x: 0, y: 4)
                     
                     // Use BadHabitButton for bad habits, RingFillCheckmarkButton for good habits
@@ -224,6 +210,7 @@ struct CalendarAndToggleView: View {
                             repeatsPerDay: repeatsPerDay,
                             completedRepeats: completedRepeats
                         )
+                        
                         .scaleEffect(1.5) // Make it bigger (32px -> 48px)
                         .scaleEffect(isToggling ? 0.95 : 1.0)
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isToggling)
@@ -246,8 +233,8 @@ struct CalendarAndToggleView: View {
                     }
                 }
                 
-                Text("Today")
-                    .font(.customFont("Lexend", .semiBold, 12))
+                Text("Complete Today?")
+                    .font(.customFont("Lexend", .medium, 11))
                     .foregroundColor(.secondary)
             }
         }

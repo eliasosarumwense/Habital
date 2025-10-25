@@ -130,6 +130,7 @@ struct CreateHabitCoreSection: View {
             }
             VStack(spacing: 10) {
                 // Habit name field
+                /*
                 Button(action: showWallpaperPicker) {
                     HStack(spacing: 8) {
                         Image(systemName: hasWallpaper ? "photo.fill" : "photo.badge.plus")
@@ -169,6 +170,7 @@ struct CreateHabitCoreSection: View {
                 .buttonStyle(ScaleButtonStyle())
                 .padding(.horizontal, 24)
                 .padding(.top, 8)
+                 */
                 VStack(alignment: .leading, spacing: 5) {
                     HStack {
                         Text("Name")

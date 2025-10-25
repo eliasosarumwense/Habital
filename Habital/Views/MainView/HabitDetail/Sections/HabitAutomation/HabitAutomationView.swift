@@ -77,13 +77,14 @@ struct HabitAnalyticsView: View {
                     // Show automation analysis
                     AutomationSection(insight: insight, habit: habit)
                     
+                    /*
                     // Show predictive insights if available
                     if let predictions = insight.predictions {
                         PredictiveInsightsSection(predictions: predictions, currentAutomation: insight.automationPercentage)
                     }
-                    
+                    */
                     // Show minimal 30-day chart
-                    //MinimalHabitChartView(habit: habit)
+                    MinimalHabitChartView(habit: habit)
                     
                 } else if viewModel.isLoading {
                     ProgressView("Analyzing habit formation...")

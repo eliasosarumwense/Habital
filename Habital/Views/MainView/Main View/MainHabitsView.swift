@@ -184,26 +184,27 @@ struct MainHabitsView: View {
     }
      */
     
-    
     private var backgroundGradient: some View {
         let baseColors: [Color]
         
         if let selectedList = getSelectedHabitList(),
            let listColor = getListColor(from: selectedList) {
-            // Use list color when available - more visible but still fades fast
+            // Use list color when available - fades from top and bottom
             baseColors = [
                 colorScheme == .dark ? listColor.opacity(0.18) : listColor.opacity(0.25), // Top opacity
-                colorScheme == .dark ? listColor.opacity(0.10) : listColor.opacity(0.15), // Middle
-                colorScheme == .dark ? listColor.opacity(0.04) : listColor.opacity(0.06), // Still fades fast
-                colorScheme == .dark ? Color(hex: "0A0A0A") : Color.clear                  // Nearly black
+                colorScheme == .dark ? listColor.opacity(0.10) : listColor.opacity(0.15), // Upper middle
+                colorScheme == .dark ? listColor.opacity(0.08) : listColor.opacity(0.12), // Lower middle
+                colorScheme == .dark ? listColor.opacity(0.05) : listColor.opacity(0.06), // Start bottom fade
+                colorScheme == .dark ? Color(hex: "14141A") : Color(hex: "E8E8FF")        // Bottom color - tiny hint of blue
             ]
         } else {
             // Default colors with more visible secondary gradient for "All Habits"
             baseColors = [
-                colorScheme == .dark ? Color.primary.opacity(0.20) : Color.primary.opacity(0.15), // More visible top
-                colorScheme == .dark ? Color.secondary.opacity(0.12) : Color.secondary.opacity(0.08), // Visible middle
-                colorScheme == .dark ? Color.secondary.opacity(0.08) : Color.secondary.opacity(0.04), // Fade
-                colorScheme == .dark ? Color(hex: "0A0A0A") : Color.clear                              // Nearly black to clear
+                colorScheme == .dark ? Color.primary.opacity(0.20) : Color.primary.opacity(0.15),     // Top
+                colorScheme == .dark ? Color.secondary.opacity(0.12) : Color.secondary.opacity(0.08), // Upper middle
+                colorScheme == .dark ? Color.secondary.opacity(0.08) : Color.secondary.opacity(0.06), // Lower middle
+                colorScheme == .dark ? Color.secondary.opacity(0.06) : Color.secondary.opacity(0.03), // Start bottom fade
+                colorScheme == .dark ? Color(hex: "14141A") : Color(hex: "E8E8FF")                     // Bottom color - tiny hint of blue
             ]
         }
         

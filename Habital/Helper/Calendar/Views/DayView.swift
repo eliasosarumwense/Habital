@@ -188,23 +188,40 @@ struct DayView: View {
                    selectedDate = date
                }
            }
+           /*
            .simultaneousGesture(
                DragGesture(minimumDistance: 0)
-                   .onChanged { _ in
+                   .onChanged { value in
+                       // Only handle small movements for press effects
+                       // Let horizontal swipes pass through to parent ScrollView
+                       let horizontalMovement = abs(value.translation.x)
+                       let verticalMovement = abs(value.translation.y)
+                       
+                       // If horizontal movement is significant, don't handle this gesture
+                       if horizontalMovement > 10 {
+                           return
+                       }
+                       
                        if isSelected && isDateAccessible {
                            withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
                                isPressed = true
                            }
                        }
                    }
-                   .onEnded { _ in
-                       if isSelected {
-                           withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
-                               isPressed = false
+                   .onEnded { value in
+                       let horizontalMovement = abs(value.translation.x)
+                       
+                       // Only handle end if this wasn't a horizontal swipe
+                       if horizontalMovement <= 10 {
+                           if isSelected {
+                               withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
+                                   isPressed = false
+                               }
                            }
                        }
                    }
            )
+            */
            .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isSelected)
            .animation(.spring(response: 0.8, dampingFraction: 0.8), value: shouldAnimateRings)
            .animation(.easeOut(duration: 1.5), value: shouldAnimateRings)

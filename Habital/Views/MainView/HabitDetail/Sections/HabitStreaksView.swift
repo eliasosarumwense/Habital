@@ -99,7 +99,7 @@ struct HabitStreaksView: View {
     @ViewBuilder
     private var bestStreakEverSection: some View {
         VStack(spacing: 3) {
-            HStack(spacing: 2) {
+            HStack(spacing: 4) {
                 Text("Best Ever")
                     .font(.customFont("Lexend", .medium, 11))
                     .foregroundColor(.secondary)
@@ -108,9 +108,9 @@ struct HabitStreaksView: View {
                 if let streakData = streakData,
                    streakData.currentStreak > 0 &&
                    streakData.currentStreak == Int(habit.bestStreakEver) {
-                    Image(systemName: "trophy.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(.yellow)
+                    Image(systemName: "circle.fill")
+                        .font(.system(size: 6))
+                        .foregroundColor(.green)
                         .opacity(0.8)
                 }
             }

@@ -58,20 +58,22 @@ struct StatsView: View {
         
         if let selectedList = getSelectedHabitList(),
            let listColor = getListColor(from: selectedList) {
-            // Use list color when available - more visible but still fades fast
+            // Use list color when available - fades from top and bottom
             baseColors = [
                 colorScheme == .dark ? listColor.opacity(0.18) : listColor.opacity(0.25), // Top opacity
-                colorScheme == .dark ? listColor.opacity(0.10) : listColor.opacity(0.15), // Middle
-                colorScheme == .dark ? listColor.opacity(0.07) : listColor.opacity(0.08), // Still fades fast
-                colorScheme == .dark ? Color(hex: "0A0A0A") : Color.clear                  // Nearly black
+                colorScheme == .dark ? listColor.opacity(0.10) : listColor.opacity(0.15), // Upper middle
+                colorScheme == .dark ? listColor.opacity(0.08) : listColor.opacity(0.12), // Lower middle
+                colorScheme == .dark ? listColor.opacity(0.05) : listColor.opacity(0.06), // Start bottom fade
+                colorScheme == .dark ? Color(hex: "14141A") : Color(hex: "E8E8FF")        // Bottom color - tiny hint of blue
             ]
         } else {
             // Default colors with more visible secondary gradient for "All Habits"
             baseColors = [
-                colorScheme == .dark ? Color.secondary.opacity(0.15) : Color.secondary.opacity(0.20), // More visible top
-                colorScheme == .dark ? Color.secondary.opacity(0.08) : Color.secondary.opacity(0.12), // Visible middle
-                colorScheme == .dark ? Color.secondary.opacity(0.04) : Color.secondary.opacity(0.06), // Fade
-                colorScheme == .dark ? Color(hex: "0A0A0A") : Color.clear                              // Nearly black to clear
+                colorScheme == .dark ? Color.primary.opacity(0.20) : Color.primary.opacity(0.15),     // Top
+                colorScheme == .dark ? Color.secondary.opacity(0.12) : Color.secondary.opacity(0.08), // Upper middle
+                colorScheme == .dark ? Color.secondary.opacity(0.08) : Color.secondary.opacity(0.06), // Lower middle
+                colorScheme == .dark ? Color.secondary.opacity(0.06) : Color.secondary.opacity(0.03), // Start bottom fade
+                colorScheme == .dark ? Color(hex: "14141A") : Color(hex: "E8E8FF")                     // Bottom color - tiny hint of blue
             ]
         }
         
@@ -101,64 +103,63 @@ struct StatsView: View {
     }
     
     var body: some View {
-        ZStack {
-            // Add the background gradient
-            backgroundGradient
-            VStack(spacing: 0) {
-                // Stats Navigation Bar
-                statsNavigationBar
+        NavigationStack {
+            ZStack {
+                backgroundGradient
                 
-                // Main Stats Content - No Loading States
-                VStack(spacing: 20) {
-                    // Summary stats using existing component
-                    StatsSummaryRow(
-                        habits: currentHabits,
-                        date: Date()
-                    )
-                    
-                    // Completion trends using cached data
-                    OptimizedCompletionTrendsCard(
-                        dataManager: dataManager,
-                        selectedTimeRange: $selectedTimeRange,
-                        chartId: $chartId,
-                        chartColor: chartColor,
-                        colorScheme: colorScheme,
-                        onTimeRangeUpdate: updateTimeRange,
-                        currentHabits: currentHabits
-                    )
-                    .offset(y: -20)
-                    
-                    TimeRangeSelector(
-                        selectedTimeRange: $selectedTimeRange,
-                        chartColor: chartColor,
-                        colorScheme: colorScheme,
-                        onTimeRangeChanged: { range in
-                            if selectedTimeRange != range {
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.7)
-                                selectedTimeRange = range
-                                chartId = UUID()
+                VStack(spacing: 0) {
+                    // Main Stats Content
+                    VStack(spacing: 20) {
+                        StatsSummaryRow(habits: currentHabits, date: Date())
+                        
+                        OptimizedCompletionTrendsCard(
+                            dataManager: dataManager,
+                            selectedTimeRange: $selectedTimeRange,
+                            chartId: $chartId,
+                            chartColor: chartColor,
+                            colorScheme: colorScheme,
+                            onTimeRangeUpdate: updateTimeRange,
+                            currentHabits: currentHabits
+                        )
+                        .offset(y: -20)
+                        
+                        TimeRangeSelector(
+                            selectedTimeRange: $selectedTimeRange,
+                            chartColor: chartColor,
+                            colorScheme: colorScheme,
+                            onTimeRangeChanged: { range in
+                                if selectedTimeRange != range {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.7)
+                                    selectedTimeRange = range
+                                    chartId = UUID()
+                                }
                             }
-                        }
-                    )
-                    .offset(y: -60)
+                        )
+                        .offset(y: -60)
+                    }
+                    .padding(.horizontal, 5)
+                    .padding(.top, 5)
+                    
+                    Spacer()
                 }
-                .padding(.horizontal, 5)
-                .padding(.top, 5)
-                
-                Spacer()
             }
+            .onAppear {
+                handleViewAppear()
+            }
+            
+            .onDisappear {
+                isViewVisible = false
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HabitUIRefreshNeeded"))) { notification in
+                handleHabitToggleWithVisibilityCheck(notification)
+            }
+            .overlay(
+                NavBarStatsView()
+                    .environmentObject(dataManager)
+                    .opacity(0)
+            )
         }
-        .onAppear {
-                    handleViewAppear()
-                }
-                .onDisappear {
-                    isViewVisible = false
-                }
-                // MODIFY: Your existing notification listener
-                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HabitUIRefreshNeeded"))) { notification in
-                    handleHabitToggleWithVisibilityCheck(notification)
-                }
-        //.background(optimizedNotificationListeners)
+        
     }
     
     private func handleViewAppear() {
@@ -170,7 +171,7 @@ struct StatsView: View {
                     await processPendingUpdates()
                 }
             }
-            
+        
             // Refresh the current time range data to ensure it's up to date
             refreshCurrentTimeRangeData()
         }
@@ -347,86 +348,7 @@ struct StatsView: View {
         return .secondary
     }
     
-    private var statsNavigationBar: some View {
-        ZStack {
-            Rectangle()
-                .fill(.clear)
-                .edgesIgnoringSafeArea(.top)
-            
-            HStack(spacing: 0) {
-                // Left side - Stats title
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Statistics")
-                        .font(.customFont("Lexend", .bold, 22))
-                        .foregroundColor(.primary)
-                    
-                    Text("Your habit insights")
-                        .font(.customFont("Lexend", .medium, 13))
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                
-                Spacer()
-                
-                // Right side - Circular Glass Menu Button
-                if filteredHabits == nil { // Only show if not using pre-filtered habits
-                    Menu {
-                        // All Habits option with enhanced animation
-                        Button(action: {
-                            // Enhanced input animation with modern spring (matching HabitListTabView)
-                            withAnimation(.interpolatingSpring(stiffness: 350, damping: 20)) {
-                                // Visual feedback animation
-                            }
-                            
-                            // Enhanced list selection animation with chart update
-                            withAnimation(.interpolatingSpring(stiffness: 300, damping: 30).delay(0.1)) {
-                                dataManager.updateSelectedList(0)
-                            }
-                            
-                            // Regenerate chart with new data (like MainHabitsView)
-                            chartId = UUID()
-                            
-                            // Add haptic feedback like in HabitListTabView
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.7)
-                        }) {
-                            Label("All Habits", systemImage: "tray.full")
-                        }
-                        
-                        // Individual lists with enhanced animations
-                        ForEach(Array(habitLists.enumerated()), id: \.element.id) { listIndex, list in
-                            Button(action: {
-                                // Enhanced input animation with modern spring
-                                withAnimation(.interpolatingSpring(stiffness: 350, damping: 20)) {
-                                    // Visual feedback animation
-                                }
-                                
-                                // Enhanced list selection animation (matching HabitListTabView exactly)
-                                withAnimation(.interpolatingSpring(stiffness: 300, damping: 30).delay(0.1)) {
-                                    dataManager.updateSelectedList(listIndex + 1)
-                                }
-                                
-                                // Regenerate chart with new data (like MainHabitsView)
-                                chartId = UUID()
-                                
-                                // Add haptic feedback like in HabitListTabView
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.7)
-                            }) {
-                                //let habitCount = (list.habits as? Set<Habit>)?.filter { !$0.isArchived }.count ?? 0
-                                Label("\(list.name ?? "Unnamed List")", systemImage: list.icon ?? "list.bullet")
-                            }
-                        }
-                    } label: {
-                        CircularGlassMenuButton(
-                            currentStatsListIcon: currentStatsListIcon,
-                            currentStatsListColor: currentStatsListColor
-                        )
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-        }
-        .frame(height: 50)
-    }
+    
 
     // MARK: - Circular Glass Menu Button Component
     struct CircularGlassMenuButton: View {

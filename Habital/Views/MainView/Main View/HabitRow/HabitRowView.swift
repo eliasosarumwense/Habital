@@ -1088,6 +1088,7 @@ struct HabitRowView: View {
          */
         //.lightGlassBackground(cornerRadius: 30)
         .glassBackground(cornerRadius: 30)
+        .contentShape(Rectangle()) 
         .offset(x: position2.width)
         .gesture(
             DragGesture(minimumDistance: 30)
@@ -1141,10 +1142,12 @@ struct HabitRowView: View {
             
              */
                 .presentationDetents([.medium, .large], selection: $selectedDetent)
-                        .presentationCornerRadius(45)
-                        .presentationDetents([.medium], selection: .constant(.medium))
-                        // Don't set presentationBackground - let iOS 26 handle it automatically
-                        .interactiveDismissDisabled(false)
+                .presentationDetents([.fraction(0.85)])
+                
+                .presentationCornerRadius(45)
+                //.interactiveDismissDisabled(false)
+                .presentationDragIndicator(.visible)
+
                         
         }
             

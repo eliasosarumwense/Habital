@@ -45,6 +45,8 @@ struct ContentView: View {
     @EnvironmentObject var statsSummaryManager: StatsSummaryDataManager
     @EnvironmentObject var dataManager: StatsDataManager
     
+    @Environment(\.colorScheme) private var colorScheme
+    
     @State private var allViewsInitialized = false
     @State private var isInitializing = true
     
@@ -60,6 +62,7 @@ struct ContentView: View {
                     }
                 }
                 .tabViewStyle(.tabBarOnly)
+                .tint(colorScheme == .dark ? .white : .black)
             } else {
                 // iOS 17 and below uses traditional TabView
                 TabView(selection: $selectedTab) {
@@ -91,6 +94,7 @@ struct ContentView: View {
                         }
                         .tag(TabBarItem.settings)
                 }
+                .tint(.black)
             }
         }
         .environmentObject(sharedLevelData)
@@ -98,6 +102,7 @@ struct ContentView: View {
             initializeAppData()
             tabStateManager.loadSavedSelection()
             initializeAllViewsOnStartup()
+            
         }
     }
     

@@ -218,11 +218,12 @@ struct HabitDetailSheet: View {
                             }
                         }
                         .padding(.horizontal)
-                        
+                        /*
                         // Schedule section
                         scheduleSection
                             .transition(.opacity)
                             .scaleEffect(0.97)
+                         */
                          
                     }
                          
@@ -239,19 +240,26 @@ struct HabitDetailSheet: View {
                         HabitHeaderView(habit: habit, showStreaks: true)
                             .padding(.horizontal)
                         
+                        
+                        //scheduleSection
+                        
                         HabitStreaksView(habit: habit, date: date, showStreaks: showStreaks)
                             .padding(.horizontal)
                             .transition(.opacity)
-                        
+                        /*
                         CalendarAndToggleView(habit: habit, date: date)
                             .padding(.horizontal)
                             .transition(.opacity.combined(with: .move(edge: .top)))
+                         */
                         /*
                         // NEW: Circle Menu Button
                         CircleMenuButton(habit: habit, date: date)
                             .padding(.horizontal)
                             .padding(.top, 8)
                          */
+                        HabitGitHubGrid(habit: habit)
+                            .padding(.horizontal)
+                        .transition(.opacity)
                         
                     }
                     .ignoresSafeArea(.container, edges: .bottom)
@@ -262,11 +270,13 @@ struct HabitDetailSheet: View {
                         // Add spacing at the top to account for the navbar height
                         Color.clear.frame(height: 10 )
                         
+                         /*
                         HabitScoreSection(habit: habit)
                             .padding(.horizontal)
-                        HabitGitHubGrid(habit: habit)
-                            .padding(.horizontal)
-                        .transition(.opacity)
+                         */
+                        
+                        
+                        
                         
                     }
                     .ignoresSafeArea(.container, edges: .bottom)
@@ -326,7 +336,7 @@ struct HabitDetailSheet: View {
                                 refreshTrigger: $refreshChart
                             )
                             .environment(\.managedObjectContext, viewContext)
-                            .scaleEffect(0.9)
+                            //.scaleEffect(0.9)
                         )
                     }
             }
@@ -619,42 +629,7 @@ struct HabitDetailSheet: View {
                 }
                 .padding(.vertical, 10)
                 .padding(.horizontal)
-                .background(
-                    ZStack {
-                        // Glass morphism background
-                        RoundedRectangle(cornerRadius: 30, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                        
-                        // Subtle inner glow
-                        RoundedRectangle(cornerRadius: 30, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(colorScheme == .dark ? 0.05 : 0.15),
-                                        Color.clear,
-                                        Color.clear
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                        
-                        // Modern border with gradient
-                        RoundedRectangle(cornerRadius: 30, style: .continuous)
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(colorScheme == .dark ? 0.15 : 0.4),
-                                        Color.primary.opacity(0.08),
-                                        Color.clear
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1.5
-                            )
-                    }
-                )
+                .glassBackground()
             } else {
                 // No pattern found case
                 patternCard(
