@@ -8,7 +8,7 @@
 import SwiftUI
 
 // MARK: - Shimmer Effect Modifier
-struct ShimmerEffect: ViewModifier {
+struct ShimmerEffectGitGrid: ViewModifier {
     @State private var isShimmering = false
     
     let gradient = LinearGradient(
@@ -44,6 +44,6 @@ struct ShimmerEffect: ViewModifier {
 // MARK: - Convenience Extension
 extension View {
     func shimmer() -> some View {
-        self.modifier(ShimmerEffect())
+        self.modifier(ShimmerEffectGitGrid())
     }
 }
