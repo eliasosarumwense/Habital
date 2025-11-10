@@ -77,7 +77,7 @@ class HabitToggleManager: ObservableObject {
         completionVersion = UUID()
         
         // Smart cache invalidation using normalized date
-        invalidateCacheForIntervalHabit(habit: habit, completionDate: normalizedDateForCalc)
+        //invalidateCacheForIntervalHabit(habit: habit, completionDate: normalizedDateForCalc)
 
         // Specific notification for habit toggle (for stats and other views)
         NotificationCenter.default.post(
@@ -149,6 +149,10 @@ class HabitToggleManager: ObservableObject {
                 do {
                     try viewContext.save()
                     //HabitUtilities.clearHabitActivityCache()
+                    
+                    // 🔄 Trigger view updates for percentage recalculation
+                    completionVersion = UUID()
+                    
                     print("✅ Duration completion deleted for habit '\(habit.name ?? "Unknown")' - Total completions: \(habit.totalCompletions)")
                 } catch {
                     print("❌ Failed to delete duration completion: \(error)")
@@ -208,6 +212,10 @@ class HabitToggleManager: ObservableObject {
         do {
             try viewContext.save()
             //HabitUtilities.clearHabitActivityCache()
+            
+            // 🔄 Trigger view updates for percentage recalculation
+            completionVersion = UUID()
+            
             print("✅ Duration updated: \(previousMinutes)min → \(minutes)min (target: \(targetDuration)min) - Total completions: \(habit.totalCompletions)")
         } catch {
             print("❌ Failed to update duration: \(error)")
@@ -245,6 +253,10 @@ class HabitToggleManager: ObservableObject {
                 do {
                     try viewContext.save()
                     //HabitUtilities.clearHabitActivityCache()
+                    
+                    // 🔄 Trigger view updates for percentage recalculation
+                    completionVersion = UUID()
+                    
                     print("✅ Quantity completion deleted for habit '\(habit.name ?? "Unknown")' - Total completions: \(habit.totalCompletions)")
                 } catch {
                     print("❌ Failed to delete quantity completion: \(error)")
@@ -303,6 +315,10 @@ class HabitToggleManager: ObservableObject {
         do {
             try viewContext.save()
             //HabitUtilities.clearHabitActivityCache()
+            
+            // 🔄 Trigger view updates for percentage recalculation
+            completionVersion = UUID()
+            
             print("✅ Quantity updated: \(previousQuantity) → \(quantity) (target: \(targetQuantity)) - Total completions: \(habit.totalCompletions)")
         } catch {
             print("❌ Failed to update quantity: \(error)")
@@ -498,7 +514,7 @@ class HabitToggleManager: ObservableObject {
         
         do {
             try viewContext.save()
-            HabitUtilities.clearHabitActivityCache()
+            //HabitUtilities.clearHabitActivityCache()
             print("✅ Updated habit '\(habit.name ?? "Unknown")' - Total completions: \(habit.totalCompletions)")
         } catch {
             print("❌ Error updating habit: \(error)")
@@ -522,10 +538,14 @@ class HabitToggleManager: ObservableObject {
         // Get current completions AFTER potentially removing skip
         let currentCompletions = HabitUtilities.getCompletedRepeatsCount(for: habit, on: normalizedDate)
         
+        // Track if we should trigger view updates (only on full completion or clearing)
+        var shouldTriggerViewUpdate = false
+        
         // Handle the different scenarios
         if isRemovingSkip {
             // When removing a skip, just remove it - don't add any completion
             print("⚖️ Removed skip completion for multi-repeat habit")
+            shouldTriggerViewUpdate = true  // Trigger update when removing skip
             
         } else if currentCompletions >= repeatsPerDay {
             // At max completions, clear all
@@ -540,6 +560,8 @@ class HabitToggleManager: ObservableObject {
             
             // Update habit's last completion date if needed
             habit.lastCompletionDate = habit.findMostRecentCompletion(before: date)?.date
+            
+            shouldTriggerViewUpdate = true  // Trigger update when clearing completions
             
         } else {
             // Add one more completion (incremental behavior for multi-repeat)
@@ -559,11 +581,24 @@ class HabitToggleManager: ObservableObject {
             if normalizedDate > (habit.lastCompletionDate ?? Date.distantPast) {
                 habit.lastCompletionDate = normalizedDate
             }
+            
+            // Only trigger view update if we just reached full completion
+            let newCompletionCount = currentCompletions + 1
+            if newCompletionCount >= repeatsPerDay {
+                shouldTriggerViewUpdate = true
+                print("🎯 Multi-repeat habit fully completed: \(newCompletionCount)/\(repeatsPerDay)")
+            }
         }
         
         do {
             try viewContext.save()
-            HabitUtilities.clearHabitActivityCache()
+            //HabitUtilities.clearHabitActivityCache()
+            
+            // 🔄 Only trigger view updates when habit reaches full completion or is cleared
+            if shouldTriggerViewUpdate {
+                completionVersion = UUID()
+            }
+            
             print("✅ Updated multi-repeat habit '\(habit.name ?? "Unknown")' - Total completions: \(habit.totalCompletions)")
         } catch {
             print("❌ Error updating multi-repeat completion: \(error)")
@@ -1006,7 +1041,7 @@ class HabitToggleManager: ObservableObject {
                     
                     // Save
                     try viewContext.save()
-                    HabitUtilities.clearHabitActivityCache()
+                    //HabitUtilities.clearHabitActivityCache()
                     print("✅ Removed completion with dayKey: \(dayKey)")
                     
                     // 🔄 Trigger view updates

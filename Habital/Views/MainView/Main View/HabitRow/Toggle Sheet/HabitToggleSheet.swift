@@ -109,7 +109,7 @@ struct HabitToggleSheet: View {
     
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.managedObjectContext) private var viewContext
-    @StateObject private var toggleManager: HabitToggleManager
+    @EnvironmentObject var toggleManager: HabitToggleManager
     
     // State for tracking
     @State private var completedRepeats: Int = 0
@@ -153,9 +153,6 @@ struct HabitToggleSheet: View {
         self.date = date
         self.currentStreak = currentStreak
         self._isPresented = isPresented
-        
-        let ctx = habit.managedObjectContext ?? PersistenceController.shared.container.viewContext
-        _toggleManager = StateObject(wrappedValue: HabitToggleManager(context: ctx))
     }
     
     // MARK: - Computed Properties

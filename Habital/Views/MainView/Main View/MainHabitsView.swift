@@ -54,7 +54,7 @@ struct MainHabitsView: View {
     @State private var listChangeID = UUID()
     
     // Efficient caching for filtered habits
-    @State var filteredHabitsCache: [String: [Habit]] = [:]
+    @StateObject private var habitCache = HabitFilterCache()
     
     // Current filtered habits for the selected date
     @State private var currentFilteredHabits: [Habit] = []
@@ -730,7 +730,7 @@ struct MainHabitsView: View {
         let key = cacheKey(for: date)
         
         
-         if let cached = filteredHabitsCache[key] {
+         if let cached = habitCache.get(key) {
              return cached
         }
 
@@ -787,8 +787,8 @@ struct MainHabitsView: View {
             }
         }
 
-        // SYNCHRONOUS cache write - no race condition
-        filteredHabitsCache[key] = sorted
+        // Cache write - safe with ObservableObject
+        habitCache.set(key, value: sorted)
 
         return sorted
     }
@@ -800,7 +800,7 @@ struct MainHabitsView: View {
 
  
      private func cachedFilteredHabits(for date: Date) -> [Habit]? {
-     filteredHabitsCache[cacheKey(for: date)]
+         habitCache.get(cacheKey(for: date))
     }
     
     // Add this property to your MainHabitsView
@@ -940,39 +940,20 @@ extension Binding {
     MainHabitsView().environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
 }
 
-// Create a class for habit activity caching
-// class HabitActivityCache: ObservableObject {
-//     // Use TimeInterval as keys for dates for better performance
-//     private var cache: [String: [TimeInterval: Bool]] = [:]
-//     
-//     func isHabitActive(habit: Habit, on date: Date, startDate: Date) -> Bool {
-//         let calendar = Calendar.current
-//         let normalizedDate = calendar.startOfDay(for: date)
-//         let dateKey = normalizedDate.timeIntervalSince1970
-//         
-//         guard let habitID = habit.id?.uuidString else {
-//             return HabitUtilities.isHabitActive(on: date, startDate: startDate, repeatPattern: habit)
-//         }
-//         
-//         // Check cache
-//         if let dateCache = cache[habitID], let result = dateCache[dateKey] {
-//             return result
-//         }
-//         
-//         // Calculate result
-//         let result = HabitUtilities.isHabitActive(on: date, startDate: startDate, repeatPattern: habit)
-//         
-//         // Update cache
-//         if cache[habitID] == nil {
-//             cache[habitID] = [:]
-//         }
-//         cache[habitID]?[dateKey] = result
-//         
-//         return result
-//     }
-//     
-//     func clearCache() {
-//         cache = [:]
-//     }
-// }
+// Cache manager for filtered habits
+class HabitFilterCache: ObservableObject {
+    private var cache: [String: [Habit]] = [:]
+    
+    func get(_ key: String) -> [Habit]? {
+        return cache[key]
+    }
+    
+    func set(_ key: String, value: [Habit]) {
+        cache[key] = value
+    }
+    
+    func clear() {
+        cache.removeAll()
+    }
+}
 

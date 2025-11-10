@@ -230,7 +230,7 @@ struct DayView: View {
            .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isSelected)
            .animation(.spring(response: 0.8, dampingFraction: 0.8), value: shouldAnimateRings)
            .animation(.easeOut(duration: 1.5), value: shouldAnimateRings)
-           .animation(.spring(response: 0.3, dampingFraction: 0.8), value: toggleManager.completionVersion)
+           .animation(.spring(response: 0.5, dampingFraction: 0.8), value: toggleManager.completionVersion)
            
            .onChange(of: isDragging) { _, newValue in
                if !newValue {
@@ -302,22 +302,58 @@ struct DayView: View {
            return (hasActiveHabits, completionPercentage, ringColors)
        }
        
-       // ✅ FAST dayKey-based completion check
+       // ✅ FAST dayKey-based completion check (handles multi-repeat)
        private func isHabitCompletedWithDayKey(_ habit: Habit, dayKey: String) -> Bool {
-           let request = NSFetchRequest<Completion>(entityName: "Completion")
-           request.predicate = NSPredicate(
-               format: "dayKey == %@ AND habit == %@ AND completed == YES",
-               dayKey, habit
-           )
-           request.fetchLimit = 1
+           // Get the target repeats for this day
+           let repeatsPerDay = HabitUtilities.getRepeatsPerDay(for: habit, on: date)
            
-           do {
-               let count = try viewContext.count(for: request)
-               return count > 0
-           } catch {
-               print("Error checking completion: \(error)")
-               return false
+           // Get the tracking type
+           let trackingType = getTrackingType(for: habit)
+           
+           switch trackingType {
+           case .duration, .quantity:
+               // For duration/quantity, check if there's a completed entry
+               let request = NSFetchRequest<Completion>(entityName: "Completion")
+               request.predicate = NSPredicate(
+                   format: "dayKey == %@ AND habit == %@ AND completed == YES",
+                   dayKey, habit
+               )
+               request.fetchLimit = 1
+               
+               do {
+                   let count = try viewContext.count(for: request)
+                   return count > 0
+               } catch {
+                   print("Error checking completion: \(error)")
+                   return false
+               }
+               
+           case .repetitions:
+               // For repetitions, check if we've met the target count
+               let request = NSFetchRequest<Completion>(entityName: "Completion")
+               request.predicate = NSPredicate(
+                   format: "dayKey == %@ AND habit == %@ AND completed == YES",
+                   dayKey, habit
+               )
+               
+               do {
+                   let completedCount = try viewContext.count(for: request)
+                   return completedCount >= repeatsPerDay
+               } catch {
+                   print("Error checking completion count: \(error)")
+                   return false
+               }
            }
+       }
+       
+       // Helper to get tracking type for a habit
+       private func getTrackingType(for habit: Habit) -> HabitTrackingType {
+           guard let pattern = habit.repeatPattern?.allObjects.first as? RepeatPattern,
+                 let typeString = pattern.trackingType,
+                 let type = HabitTrackingType(rawValue: typeString) else {
+               return .repetitions
+           }
+           return type
        }
        
        // Keep your existing helper methods

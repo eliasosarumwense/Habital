@@ -1,6 +1,6 @@
 import Foundation
 
-struct Month: Identifiable, Equatable {
+struct Month: Identifiable, Equatable, Hashable {
     let id: String
     let weeks: [Week]
     let order: Order
@@ -88,7 +88,7 @@ extension Month {
         return Month(from: nextMonthDate, order: .next)
     }
     
-    enum Order {
+    enum Order: Hashable {
         case previous, current, next
     }
     

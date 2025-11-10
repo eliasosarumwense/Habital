@@ -5,10 +5,8 @@ struct MonthCalendarView: View {
     let dragProgress: CGFloat
     @EnvironmentObject var habitManager: HabitPreloadManager
     
-    // 🔄 Add toggleManager to observe completion changes
     @ObservedObject var toggleManager: HabitToggleManager
     
-    // Add parameters for habit data
     let getFilteredHabits: (Date) -> [Habit]
     let animateRings: Bool
     let isShownInHabitDetails: Bool?
@@ -17,11 +15,10 @@ struct MonthCalendarView: View {
     @Binding var focused: Week
     @Binding var selection: Date?
     
-    @State private var months: [Month]
-    @State private var position: ScrollPosition
+    @State private var months: [Month] = []
+    @State private var focusedMonth: Month?
     @State private var calendarWidth: CGFloat = .zero
-    @State private var currentMonthId: String?
-    @State private var isUpdatingFromMonthSwipe = false // Track if we're updating from month swipe
+    @State private var isInternalUpdate = false
     
     @AppStorage("changeSelectionOnWeekSwipe") private var changeSelectionOnWeekSwipe = true
     
@@ -52,238 +49,191 @@ struct MonthCalendarView: View {
         self.isShownInHabitDetails = isShownInHabitDetails
         self.refreshTrigger = refreshTrigger
         self.habitColor = habitColor
-        
-        let creationDate = focused.wrappedValue.days.last
-        var currentMonth = Month(from: creationDate ?? .now, order: .current)
-        
-        if let selection = selection.wrappedValue,
-           let lastDayOfTheMonth = currentMonth.weeks.first?.days.last,
-           !Calendar.isSameMonth(lastDayOfTheMonth, selection),
-           let previousMonth = currentMonth.previousMonth
-        {
-            if focused.wrappedValue.days.contains(selection) {
-                currentMonth = previousMonth
-            }
-        }
-        
-        _months = State(
-            initialValue: [
-                currentMonth.previousMonth,
-                currentMonth,
-                currentMonth.nextMonth
-            ].compactMap(\.self)
-        )
-        _position = State(initialValue: ScrollPosition(id: currentMonth.id))
-        _currentMonthId = State(initialValue: currentMonth.id)
     }
     
     var body: some View {
-        ScrollView(.horizontal) {
-            LazyHStack(spacing: .zero) {
-                ForEach(months) { month in
-                    monthViewContainer(for: month)
-                }
+        TabView(selection: $focusedMonth) {
+            ForEach(months) { month in
+                monthViewContainer(for: month)
+                    .tag(month as Month?)
             }
-            .scrollTargetLayout()
-            .frame(height: Constants.monthHeight)
         }
-        .scrollDisabled(isDragging)
-        .scrollPosition($position)
-        .scrollTargetBehavior(.viewAligned)
-        .scrollIndicators(.hidden)
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .disabled(isDragging)
+        .frame(height: Constants.monthHeight)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { newValue in
             calendarWidth = newValue
         }
-        .onChange(of: position) { oldValue, newValue in
-            guard let focusedMonth = months.first(where: { $0.id == (newValue.viewID as? String) }),
-                  let focusedWeek = focusedMonth.weeks.first
-            else { return }
+        .onChange(of: focusedMonth) { oldValue, newValue in
+            guard !isInternalUpdate else { return }
+            handleMonthChange(newValue: newValue)
+        }
+        .onChange(of: selection) { oldValue, newValue in
+            guard !isInternalUpdate else { return }
+            handleSelectionChange(newValue: newValue)
+        }
+        .onChange(of: dragProgress) { oldValue, newValue in
+            handleDragProgressChange(newValue: newValue)
+        }
+        .onAppear {
+            initializeMonths()
+        }
+    }
+    
+    // MARK: - Initialization
+    
+    private func initializeMonths() {
+        let initialDate = selection ?? Date()
+        
+        // Create current month based on the focused week or selection
+        let creationDate = focused.days.last ?? initialDate
+        let currentMonth = Month(from: creationDate, order: .current)
+        
+        // Create previous and next months
+        let previousMonth = currentMonth.previousMonth
+        let nextMonth = currentMonth.nextMonth
+        
+        months = [previousMonth, currentMonth, nextMonth].compactMap { $0 }
+        
+        // Set initial focused month
+        isInternalUpdate = true
+        focusedMonth = currentMonth
+        
+        // Update title
+        title = Calendar.monthAndYear(from: creationDate)
+        
+        // Ensure we have a valid selection
+        if selection == nil {
+            selection = initialDate
+        }
+        
+        isInternalUpdate = false
+    }
+    
+    // MARK: - Month Change Handler
+    
+    private func handleMonthChange(newValue: Month?) {
+        guard let newMonth = newValue else { return }
+        
+        isInternalUpdate = true
+        
+        // Update title with a date from the middle of the month to avoid confusion
+        let calendar = Calendar.current
+        let titleDate = newMonth.weeks.flatMap(\.days).first { date in
+            let day = calendar.component(.day, from: date)
+            return day >= 10 && day <= 20
+        } ?? newMonth.weeks.first?.days.first ?? Date()
+        
+        title = Calendar.monthAndYear(from: titleDate)
+        
+        // Update selection if enabled
+        if changeSelectionOnWeekSwipe && !isDragging {
+            updateSelectionForNewMonth(newMonth)
+        }
+        
+        // Update focused week to match the selection or the first week of the month
+        if let selection = selection,
+           let matchingWeek = newMonth.weeks.first(where: { $0.days.contains(where: { calendar.isDate($0, inSameDayAs: selection) }) }) {
+            focused = matchingWeek
+        } else if let firstWeek = newMonth.weeks.first {
+            focused = firstWeek
+        }
+        
+        isInternalUpdate = false
+    }
+    
+    private func updateSelectionForNewMonth(_ newMonth: Month) {
+        let calendar = Calendar.current
+        
+        // Try to maintain the same day of month
+        if let currentSelection = selection {
+            let currentDay = calendar.component(.day, from: currentSelection)
             
-            // ✅ NEW: Check if this month should be blocked BEFORE updating anything
-            if habitManager.isLoaded && !habitManager.monthHasValidDays(focusedMonth) {
-                // Block navigation to this month by resetting position
-                // Find the last valid month and reset position to it
-                if let lastValidMonth = months.last(where: { habitManager.monthHasValidDays($0) }) {
-                    DispatchQueue.main.async {
-                        self.position = ScrollPosition(id: lastValidMonth.id)
-                    }
-                }
-                return
-            }
-            
-            // Rest of existing logic...
-            // Determine if we've changed months
-            let isNewMonth = currentMonthId != focusedMonth.id
-            
-            // Update the current month ID
-            currentMonthId = focusedMonth.id
-            
-            // FIXED: Prioritize today's month when the current week spans two months
-            let today = Date()
-            let calendar = Calendar.current
-            let todayComponents = calendar.dateComponents([.year, .month], from: today)
-            
-            let titleDate: Date
-            
-            // Check if today's date is in the focused week
-            if focusedWeek.days.contains(where: { calendar.isDate($0, inSameDayAs: today) }) {
-                // Today is in the focused week, use today's month for the title
-                titleDate = today
+            // Find the same day number in the new month
+            if let sameDay = newMonth.weeks.flatMap(\.days).first(where: { date in
+                calendar.component(.day, from: date) == currentDay
+            }) {
+                selection = sameDay
             } else {
-                // Today is not in the focused week, use a date from the focused month
-                titleDate = focusedMonth.weeks.flatMap(\.days).first { date in
-                    let day = calendar.component(.day, from: date)
-                    return day >= 10 && day <= 20  // Use a middle day of the month
-                } ?? focusedWeek.days.first!
-            }
-            
-            title = Calendar.monthAndYear(from: titleDate)
-            
-            // Only update selection if we've actually changed months AND setting is enabled
-            if isNewMonth && changeSelectionOnWeekSwipe {
-                isUpdatingFromMonthSwipe = true
+                // If the day doesn't exist (e.g., Feb 30), use the last day of the month
+                let monthDays = newMonth.weeks.flatMap(\.days)
+                let middleMonthDate = monthDays.first { date in
+                    calendar.component(.day, from: date) == 15
+                } ?? monthDays.first
                 
-                // Try to maintain the same day of month
-                if let currentSelection = selection {
-                    let calendar = Calendar.current
-                    let currentDay = calendar.component(.day, from: currentSelection)
-                    
-                    let targetMonthDate = focusedMonth.weeks.flatMap(\.days).first { date in
-                        calendar.component(.day, from: date) == 15
-                    } ?? focusedWeek.days.first!
-                    
-                    // Try to find the same day in the new month
-                    if let sameDay = focusedMonth.weeks.flatMap(\.days).first(where: { date in
-                        calendar.component(.day, from: date) == currentDay
-                    }) {
-                        selection = sameDay
-                    } else {
-                        // If the day doesn't exist in the new month (e.g., Feb 30), use the last valid day
-                        let lastDayOfMonth = focusedMonth.weeks.flatMap(\.days).filter { date in
-                            calendar.component(.month, from: date) == calendar.component(.month, from: targetMonthDate)
-                        }.max()
-                        selection = lastDayOfMonth ?? targetMonthDate
-                    }
-                }
-                
-                focused = focusedWeek
-                isUpdatingFromMonthSwipe = false
-            } else if isNewMonth {
-                // If setting is disabled, only update the focused week, not the selection
-                focused = focusedWeek
-            }
-        }
-        .onChange(of: selection) { _, newValue in
-            // Only update focused week if we're not in the middle of a month swipe update
-            guard !isUpdatingFromMonthSwipe,
-                  let date = newValue,
-                  let week = months.flatMap(\.weeks).first(where: { (week) -> Bool in
-                      week.days.contains(date)
-                  })
-            else { return }
-            focused = week
-        }
-        .onChange(of: dragProgress) { _, newValue in
-            guard newValue == 1 else { return }
-            if let selection,
-               let currentMonth = months.first(where: { $0.id == (position.viewID as? String) }),
-               currentMonth.weeks.flatMap(\.days).contains(selection),
-               let newFocus = currentMonth.weeks.first(where: { $0.days.contains(selection) })
-            {
-                focused = newFocus
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CalendarConstraintsChanged"))) { _ in
-            // Refresh the weeks/months arrays to reflect new constraints
-            refreshMonthsForNewConstraints() // or refreshMonthsForNewConstraints()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ForceCalendarUpdate"))) { notification in
-            guard let userInfo = notification.userInfo,
-                  let newDate = userInfo["newDate"] as? Date else { return }
-            
-            // Find the month containing the new date
-            let calendar = Calendar.current
-            let targetMonth = months.first { month in
-                month.theSameMonth(as: newDate)
-            }
-            
-            if let targetMonth = targetMonth {
-                // Found the target month, navigate to it
-                if let targetWeek = targetMonth.weeks.first(where: { week in
-                    week.days.contains(where: { calendar.isDate($0, inSameDayAs: newDate) })
-                }) {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        focused = targetWeek
-                        selection = newDate
-                    }
-                    
-                    // Update scroll position to show the correct month
-                    position.scrollTo(id: targetMonth.id, anchor: .center)
-                }
-            } else {
-                // Target month not loaded, rebuild months array starting from the earliest valid month
-                let earliestMonth = habitManager.getEarliestValidMonth()
-                let newMonths: [Month] = (0..<12).compactMap { monthOffset in
-                    guard let monthDate = calendar.date(byAdding: .month, value: monthOffset, to: earliestMonth) else { return nil }
-                    return Month(from: monthDate, order: monthOffset == 0 ? .current : .next)
-                }
-                
-                months = newMonths
-                
-                // Try again to find the target month
-                if let targetMonth = newMonths.first(where: { $0.theSameMonth(as: newDate) }),
-                   let targetWeek = targetMonth.weeks.first(where: { week in
-                       week.days.contains(where: { calendar.isDate($0, inSameDayAs: newDate) })
-                   }) {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        focused = targetWeek
-                        selection = newDate
-                    }
-                    position.scrollTo(id: targetMonth.id, anchor: .center)
+                if let middleMonthDate = middleMonthDate {
+                    let lastDayOfMonth = monthDays.filter { date in
+                        calendar.component(.month, from: date) == calendar.component(.month, from: middleMonthDate)
+                    }.max()
+                    selection = lastDayOfMonth ?? middleMonthDate
                 }
             }
         }
     }
     
-    func refreshMonthsForNewConstraints() {
-        guard habitManager.isLoaded else { return }
+    // MARK: - Selection Change Handler
+    
+    private func handleSelectionChange(newValue: Date?) {
+        guard let date = newValue else { return }
         
         let calendar = Calendar.current
-        let currentMonthDate = months.first(where: { $0.id == (position.viewID as? String) })?.initializedDate ?? Date()
         
-        // Check if we can now load more previous months
-        var newMonths = months
-        var canLoadMore = true
-        var checkDate = currentMonthDate
-        
-        // Try to add previous months that are now accessible
-        while canLoadMore && newMonths.count < 12 { // Reasonable limit
-            if let previousMonthDate = calendar.date(byAdding: .month, value: -1, to: checkDate) {
-                let previousMonth = Month(from: previousMonthDate, order: .previous)
+        // Find the week containing this date
+        if let week = months.flatMap(\.weeks).first(where: { $0.days.contains(where: { calendar.isDate($0, inSameDayAs: date) }) }) {
+            if focused.id != week.id {
+                isInternalUpdate = true
+                focused = week
                 
-                // Check if this month has any valid days
-                let allDaysInMonth = previousMonth.weeks.flatMap(\.days)
-                let hasValidDays = allDaysInMonth.contains { !habitManager.isDateBeforeEarliest($0) }
+                // Update title if needed
+                title = Calendar.monthAndYear(from: date)
+                
+                isInternalUpdate = false
+            }
+        }
+    }
+    
+    // MARK: - Drag Progress Handler
+    
+    private func handleDragProgressChange(newValue: CGFloat) {
+        guard newValue == 1 else { return }
+        
+        // When drag is complete, sync focused week with selection
+        if let selection = selection,
+           let currentMonth = focusedMonth,
+           currentMonth.weeks.flatMap(\.days).contains(where: { Calendar.current.isDate($0, inSameDayAs: selection) }),
+           let newFocus = currentMonth.weeks.first(where: { $0.days.contains(where: { Calendar.current.isDate($0, inSameDayAs: selection) }) }) {
+            focused = newFocus
+        }
+    }
+    
+    // MARK: - Dynamic Month Loading
+    
+    private func loadMonth(from month: Month) {
+        // Load previous month
+        if month.order == .previous, months.first?.id == month.id, let previousMonth = month.previousMonth {
+            // Check if valid (if habitManager is loaded)
+            if !habitManager.isLoaded {
+                months.insert(previousMonth, at: 0)
+            } else {
+                let allDaysInPreviousMonth = previousMonth.weeks.flatMap(\.days)
+                let hasValidDays = allDaysInPreviousMonth.contains { !habitManager.isDateBeforeEarliest($0) }
                 
                 if hasValidDays {
-                    newMonths.insert(previousMonth, at: 0)
-                    checkDate = previousMonthDate
-                } else {
-                    canLoadMore = false
+                    months.insert(previousMonth, at: 0)
                 }
-            } else {
-                canLoadMore = false
             }
         }
         
-        months = newMonths
+        // Load next month
+        if month.order == .next, months.last?.id == month.id, let nextMonth = month.nextMonth {
+            months.append(nextMonth)
+        }
     }
-}
-
-extension MonthCalendarView {
-    // Helper method to break up complex expression for type checker
+    
+    // MARK: - View Helpers
+    
     @ViewBuilder
     private func monthViewContainer(for month: Month) -> some View {
         VStack {
@@ -306,27 +256,9 @@ extension MonthCalendarView {
         }
     }
     
-    func loadMonth(from month: Month) {
-        if month.order == .previous, months.first == month, let previousMonth = month.previousMonth {
-            // Check if previous month has ANY valid days
-            let allDaysInPreviousMonth = previousMonth.weeks.flatMap(\.days)
-            let hasValidDays = allDaysInPreviousMonth.contains { !habitManager.isDateBeforeEarliest($0) }
-            
-            if hasValidDays {
-                var months = self.months
-                months.insert(previousMonth, at: 0)
-                self.months = months
-            }
-        } else if month.order == .next, months.last == month, let nextMonth = month.nextMonth {
-            var months = months
-            months.append(nextMonth)
-            self.months = months
-        }
-    }
-    
-    func verticalOffset(for month: Month) -> CGFloat {
+    private func verticalOffset(for month: Month) -> CGFloat {
         guard let index = month.weeks.firstIndex(where: { $0 == focused }) else { return .zero }
-        let height = Constants.monthHeight/CGFloat(month.weeks.count)
-        return CGFloat(month.weeks.count - 1)/2 * height - CGFloat(index) * height
+        let height = Constants.monthHeight / CGFloat(month.weeks.count)
+        return CGFloat(month.weeks.count - 1) / 2 * height - CGFloat(index) * height
     }
 }
