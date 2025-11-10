@@ -448,10 +448,14 @@ struct NavBarMainHabitView: View {
     private var sortMenuContent: some View {
         ForEach(HabitSortOption.allCases) { option in
             Button(action: {
-                withAnimation {
+                withAnimation(.easeInOut(duration: 0.3)) {
                     sortOption = option
                 }
                 HabitSortOption.save(option)
+                
+                // Provide haptic feedback
+                let generator = UIImpactFeedbackGenerator(style: .light)
+                generator.impactOccurred()
             }) {
                 HStack {
                     Label(option.rawValue, systemImage: option.icon)

@@ -41,6 +41,11 @@ struct DayView: View {
            return ColorPalette.color(at: accentColorIndex)
        }
        
+       // ✅ Cache calculation results to avoid re-calculating in body
+       @State private var cachedHasActiveHabits: Bool = false
+       @State private var cachedCompletionPercentage: Double = 0.0
+       @State private var cachedRingColors: [Color] = []
+       
        var body: some View {
            let isToday = Calendar.current.isDateInToday(date)
            let isSelected = Calendar.current.isDate(date, inSameDayAs: selectedDate ?? Date.distantPast)
@@ -48,14 +53,11 @@ struct DayView: View {
            
            let isDateAccessible = habitManager.canNavigateToDate(date)
            
-           // Get filtered habits for this day
-           let habits = !isDragging ? getFilteredHabits(date) : []
-           
-           // ✅ Use optimized calculation with dayKey
-           // Force recalculation by accessing the observed property
-           let _ = toggleManager.completionVersion
-           let (hasActiveHabits, completionPercentage, ringColors) = (showEllipse && !isDragging) ?
-               calculateHabitDataOptimized(habits: habits, dayKey: dayKey) : (false, 0.0, [Color]())
+           // ✅ PERFORMANCE: Use cached values in body instead of calculating
+           // Calculation happens in onChange/onAppear, not during render
+           let hasActiveHabits = cachedHasActiveHabits
+           let completionPercentage = cachedCompletionPercentage
+           let ringColors = cachedRingColors
            
            ZStack {
                // Background
@@ -232,6 +234,21 @@ struct DayView: View {
            .animation(.easeOut(duration: 1.5), value: shouldAnimateRings)
            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: toggleManager.completionVersion)
            
+           .onChange(of: toggleManager.completionVersion) { _, _ in
+               // ✅ PERFORMANCE: Calculate outside of body render
+               // Animate ring update smoothly
+               withAnimation(.easeInOut(duration: 0.3)) {
+                   updateCachedData()
+               }
+           }
+           
+           // ✅ Observe list changes to recalculate progress
+           .onChange(of: habitManager.currentListIndex) { _, _ in
+               withAnimation(.easeInOut(duration: 0.3)) {
+                   updateCachedData()
+               }
+           }
+           
            .onChange(of: isDragging) { _, newValue in
                if !newValue {
                    shouldAnimateRings = false
@@ -240,11 +257,20 @@ struct DayView: View {
                            shouldAnimateRings = true
                        }
                    }
+                   // ✅ Recalculate when dragging stops
+                   updateCachedData()
                } else {
                    shouldAnimateRings = false
+                   // Clear cache while dragging for performance
+                   cachedHasActiveHabits = false
+                   cachedCompletionPercentage = 0.0
+                   cachedRingColors = []
                }
            }
            .onAppear {
+               // ✅ Initial calculation on appear
+               updateCachedData()
+               
                if Calendar.current.isDateInToday(date) {
                    shouldAnimateRings = true
                } else if !isDragging {
@@ -255,6 +281,24 @@ struct DayView: View {
                    }
                }
            }
+       }
+       
+       // MARK: - ✅ Cache Update Method
+       
+       private func updateCachedData() {
+           guard showEllipse && !isDragging else {
+               cachedHasActiveHabits = false
+               cachedCompletionPercentage = 0.0
+               cachedRingColors = []
+               return
+           }
+           
+           let habits = getFilteredHabits(date)
+           let result = calculateHabitDataOptimized(habits: habits, dayKey: dayKey)
+           
+           cachedHasActiveHabits = result.hasActiveHabits
+           cachedCompletionPercentage = result.completionPercentage
+           cachedRingColors = result.ringColors
        }
        
        // MARK: - ✅ OPTIMIZED Calculation using dayKey

@@ -28,7 +28,7 @@ class HabitToggleManager: ObservableObject {
         let normalizedDateForCalc = calendar.startOfDay(for: dateToUse)  // Always use normalized for calculations
         
         // Cache repeatsPerDay using normalized date for calculations
-        let repeatsPerDay = HabitUtilities.getRepeatsPerDay(for: habit, on: normalizedDateForCalc)
+        //let repeatsPerDay = HabitUtilities.getRepeatsPerDay(for: habit, on: normalizedDateForCalc)
         
         // Cache before state using normalized date
         let wasCompletedBefore = isHabitCompletedForDate(habit, on: normalizedDateForCalc)
@@ -90,7 +90,7 @@ class HabitToggleManager: ObservableObject {
                 "isCompleted": isCompletedAfter
             ]
         )
-        
+        /*
         // SMART STREAK UPDATE: Calculate streaks only for this habit and check if it affects best streaks
         Task {
             let streakData = await calculateStreakDataForHabit(habit, on: date)
@@ -108,6 +108,7 @@ class HabitToggleManager: ObservableObject {
                 )
             }
         }
+         */
         //HabitUtilities.clearHabitActivityCache()
     }
     
@@ -135,7 +136,7 @@ class HabitToggleManager: ObservableObject {
             // If minutes is 0, delete all completions for this date
             if minutes == 0 {
                 let completedCount = getCompletedCompletionsCount(for: habit, on: normalizedDate)
-                let removedCount = clearAllCompletionsOptimized(for: habit, on: normalizedDate)
+                //let removedCount = clearAllCompletionsOptimized(for: habit, on: normalizedDate)
                 
                 // Only decrement by completed completions that were actually counted
                 if completedCount > 0 && !isRemovingSkip {
@@ -239,7 +240,7 @@ class HabitToggleManager: ObservableObject {
             // If quantity is 0, delete all completions for this date
             if quantity == 0 {
                 let completedCount = getCompletedCompletionsCount(for: habit, on: normalizedDate)
-                let removedCount = clearAllCompletionsOptimized(for: habit, on: normalizedDate)
+                //let removedCount = clearAllCompletionsOptimized(for: habit, on: normalizedDate)
                 
                 // Only decrement by completed completions that were actually counted
                 if completedCount > 0 && !isRemovingSkip {
@@ -550,7 +551,7 @@ class HabitToggleManager: ObservableObject {
         } else if currentCompletions >= repeatsPerDay {
             // At max completions, clear all
             let completedCount = getCompletedCompletionsCount(for: habit, on: normalizedDate)
-            let removedCount = clearAllCompletionsOptimized(for: habit, on: normalizedDate)
+            //let removedCount = clearAllCompletionsOptimized(for: habit, on: normalizedDate)
             
             // Decrement by completed completions that were actually counted
             if completedCount > 0 {
@@ -650,13 +651,13 @@ class HabitToggleManager: ObservableObject {
         let dayKey = DayKeyFormatter.localKey(from: date)
         
         // Get current completion state BEFORE making changes
-        let wasCompleted = isHabitCompletedForDate(habit, on: normalizedDate)
+        //let wasCompleted = isHabitCompletedForDate(habit, on: normalizedDate)
         
         // Count how many completed completions exist for this date
         let completedCompletionsCount = getCompletedCompletionsCount(for: habit, on: normalizedDate)
         
         // Remove any existing completions for this date (both completed and uncompleted)
-        let removedCount = clearAllCompletionsOptimized(for: habit, on: normalizedDate)
+        //let removedCount = clearAllCompletionsOptimized(for: habit, on: normalizedDate)
         
         // Adjust total completions ONLY by the number of completed completions that were removed
         if completedCompletionsCount > 0 {

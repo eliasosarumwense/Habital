@@ -265,7 +265,21 @@ struct MainHabitsView: View {
         
         .onChange(of: selectedDate) { oldValue, newValue in
             // Update filtered habits when date changes
-            //updateFilteredHabits()
+            updateFilteredHabits()
+        }
+        .onChange(of: sortOption) { oldValue, newValue in
+            // Clear cache and update filtered habits when sort option changes
+            habitCache.clear()
+            updateFilteredHabits()
+        }
+        .onChange(of: toggleManager.completionVersion) { oldValue, newValue in
+            // Only clear cache and update for sort options that depend on completion status
+            guard sortOption == .completion || sortOption == .streak else { return }
+            
+            // Clear cache and update filtered habits immediately when a habit is toggled
+            // The animation delay is handled in DailyHabitsView
+            habitCache.clear()
+            updateFilteredHabits()
         }
         .onChange(of: showArchivedHabits) { _, _ in
             // invalidateCaches()
@@ -279,7 +293,7 @@ struct MainHabitsView: View {
             habitManager.currentListIndex = newValue
             
             // Update habitsVersion to trigger WeekTimelineView refresh
-            habitsVersion = UUID()
+            //habitsVersion = UUID()
             
             // Update filtered habits for new list
             updateFilteredHabits()
@@ -320,7 +334,7 @@ struct MainHabitsView: View {
             } else {
                 listChangeDirection = .none
             }
-            //HabitUtilities.clearHabitActivityCache()
+            HabitUtilities.clearHabitActivityCache()
         }
         .onDisappear {
             UserDefaults.saveSelectedListIndex(selectedListIndex)
@@ -543,6 +557,8 @@ struct MainHabitsView: View {
                             // invalidateCaches()
                             updateFilteredHabits()
                         },
+                        completionVersion: toggleManager.completionVersion,
+                        sortOption: sortOption,
                         showArchivedHabits: $showArchivedHabits,
                         listChangeDirection: listChangeDirection,
                         listChangeID: selectedListIndex
@@ -795,7 +811,7 @@ struct MainHabitsView: View {
 
     private func cacheKey(for date: Date) -> String {
          let d = Calendar.current.startOfDay(for: date).timeIntervalSince1970
-        return "\(d)|\(selectedListIndex)|\(showArchivedHabits ? 1 : 0)|\(sortOption.rawValue)"
+        return "\(d)|\(selectedListIndex)|\(showArchivedHabits ? 1 : 0)|\(sortOption.rawValue)|\(toggleManager.completionVersion.uuidString)"
     }
 
  

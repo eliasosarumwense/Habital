@@ -16,6 +16,8 @@ struct DailyHabitsView: View {
     let toggleCompletion: (Habit) -> Void
     let getNextOccurrenceText: (Habit) -> String
     var onHabitDeleted: () -> Void
+    let completionVersion: UUID // Add this to track toggle changes
+    let sortOption: HabitSortOption // Add this to check if delay is needed
     
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.colorScheme) private var colorScheme
@@ -24,6 +26,10 @@ struct DailyHabitsView: View {
     @State private var showDeleteAlert = false
     @State private var showSettingsView = false
     @State private var showingCreateHabitView = false
+    
+    // State for debounced completion animation
+    @State private var debouncedCompletionVersion: UUID = UUID()
+    @State private var completionDebounceTimer: Timer?
     
     @Binding var showArchivedHabits: Bool
     
@@ -285,10 +291,28 @@ struct DailyHabitsView: View {
                 // ✅ NEW: Handle rapid date changes
                 handleDateChange()
             }
+            .onChange(of: completionVersion) { oldValue, newValue in
+                // Only apply delay for sort options that need reordering on toggle
+                let shouldDelay = sortOption == .completion || sortOption == .streak
+                
+                if shouldDelay {
+                    // Debounce completion version changes with 1 second delay
+                    completionDebounceTimer?.invalidate()
+                    completionDebounceTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { _ in
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                            debouncedCompletionVersion = newValue
+                        }
+                    }
+                } else {
+                    // For other sort options, update immediately (no reordering needed)
+                    debouncedCompletionVersion = newValue
+                }
+            }
             .onDisappear {
                 // Clean up timers
                 rapidChangeTimer?.invalidate()
                 toggleDebouncer?.invalidate()
+                completionDebounceTimer?.invalidate()
             }
         
     }
@@ -389,8 +413,13 @@ struct DailyHabitsView: View {
                             date: date
                         )
                         .padding(.bottom, 4)
-                        
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .top).combined(with: .opacity),
+                            removal: .move(edge: .bottom).combined(with: .opacity)
+                        ))
                     }
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8), value: habits.map { $0.objectID })
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8), value: debouncedCompletionVersion)
                     
                     if filteredHabits.isEmpty && !showArchivedHabits {
                         EmptyHabitsView(
