@@ -39,6 +39,16 @@ struct HabitDetailSheet: View {
     
     @State private var preloadedCalendarView: AnyView?
     
+    // Sheet presentation states
+    @State private var showCalendarSheet = false
+    @State private var showAnalyticsSheet = false
+    @State private var showEditSheet = false
+    @State private var showArchiveAlert = false
+    @State private var showDeleteAlert = false
+    
+    // Performance optimization - delayed loading
+    @State private var showAutomationCard = false
+    
     // Calculate streak and other metrics
     private var streak: Int {
         return habit.calculateStreak(upTo: date)
@@ -61,6 +71,32 @@ struct HabitDetailSheet: View {
             return Color(uiColor)
         }
         return .blue // Default color if not set
+    }
+    
+    // Automation percentage for color matching
+    @State private var automationPercentage: Double = 0
+    
+    // Get automation colors like HabitAutomationBarCard
+    private func getAutomationColors(for percentage: Double) -> [Color] {
+        if habit.isBadHabit {
+            // For bad habits: red = still doing it, green = successfully avoiding
+            if percentage < 30 {
+                return [.red, .orange]
+            } else if percentage < 70 {
+                return [.orange, .yellow]
+            } else {
+                return [.green, .mint]
+            }
+        } else {
+            // For good habits: standard progression
+            if percentage < 30 {
+                return [.red, .orange]
+            } else if percentage < 70 {
+                return [.orange, .yellow]
+            } else {
+                return [.green, .blue]
+            }
+        }
     }
     
     // Format date with specific style
@@ -177,19 +213,19 @@ struct HabitDetailSheet: View {
     }
     
     private var backgroundGradient: some View {
-        let base = habitColor ?? .secondary
+        let base = habitColor
+        let customBottom = colorScheme == .dark ? Color(hex: "14141A") : Color(hex: "E8E8FF")
 
         let top   = colorScheme == .dark ? 0.10 : 0.15
         let mid   = colorScheme == .dark ? 0.06 : 0.11
         let low   = colorScheme == .dark ? 0.04 : 0.08
-        let floor = colorScheme == .dark ? Color(hex: "0A0A0A") : Color.clear
 
         return LinearGradient(
             gradient: Gradient(colors: [
-                floor,                 // now at the TOP side
-                base.opacity(low),
+                base.opacity(top),      // habit color at TOP (most visible)
                 base.opacity(mid),
-                base.opacity(top)               // faintest color now at BOTTOM
+                base.opacity(low),
+                customBottom            // custom color at BOTTOM
             ]),
             startPoint: .top,
             endPoint: .bottom
@@ -201,127 +237,160 @@ struct HabitDetailSheet: View {
         ZStack(alignment: .top) {
             backgroundGradient
             // TabView with swipe navigation
-            TabView(selection: $selectedTab) {
-                // Tab 3: Schedule
-                ScrollView {
-                    VStack(spacing: 14) {
-                        // Add spacing at the top to account for the navbar height
-                        Color.clear.frame(height: 10 )
-                        
-                         
-                        
-                        VStack(alignment: .leading, spacing: 12) {
-                            if let calendarView = preloadedCalendarView {
-                                calendarView
-                            } else {
-                                ProgressView().frame(height: 200)
-                            }
-                        }
-                        .padding(.horizontal)
-                        /*
-                        // Schedule section
-                        scheduleSection
-                            .transition(.opacity)
-                            .scaleEffect(0.97)
-                         */
-                         
-                    }
-                         
-                    .ignoresSafeArea(.container, edges: .bottom)
-                }
-                .tag(0)
+            VStack {
                 // Tab 1: Overview - Header + Calendar Toggle + Streaks
-                ScrollView {
+                
                     VStack(spacing: 14) {
                         // Add spacing at the top to account for the navbar height
-                        Color.clear.frame(height: 10 )
+                        Color.clear.frame(height: 5)
                         
                         // Header is always displayed
                         HabitHeaderView(habit: habit, showStreaks: true)
                             .padding(.horizontal)
                         
                         
-                        //scheduleSection
+                        HabitStreaksView(habit: habit, date: Date(), showStreaks: showStreaks)
+                            .padding(.horizontal)
                         
-                        HabitStreaksView(habit: habit, date: date, showStreaks: showStreaks)
+                        HabitGitHubGrid(habit: habit, showHeader: false)
                             .padding(.horizontal)
-                            .transition(.opacity)
-                        /*
-                        CalendarAndToggleView(habit: habit, date: date)
-                            .padding(.horizontal)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                         */
-                        /*
-                        // NEW: Circle Menu Button
-                        CircleMenuButton(habit: habit, date: date)
-                            .padding(.horizontal)
-                            .padding(.top, 8)
-                         */
-                        HabitGitHubGrid(habit: habit)
-                            .padding(.horizontal)
-                        .transition(.opacity)
+                            .onAppear {
+                                // Trigger delayed loading after GitHub grid appears
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        showAutomationCard = true
+                                    }
+                                }
+                            }
+                        HStack {
+                            
+                            WeeklyCompletionPieCard(habit: habit)
+                            Spacer()
+                            
+                            // Load automation card with delay for performance
+                            if showAutomationCard {
+                                HabitAutomationBarCard(habit: habit)
+                                    .transition(.asymmetric(
+                                        insertion: .opacity.combined(with: .scale(scale: 0.8)),
+                                        removal: .opacity
+                                    ))
+                            } else {
+                                // Placeholder with same dimensions
+                                Rectangle()
+                                    .fill(Color.clear)
+                                    .frame(width: 100, height: 90) // Adjust to match HabitAutomationBarCard size
+                            }
+                        }
+                        .padding(.horizontal)
+                       
+                        
+                        // Bottom action buttons
+                        VStack {
+                            
+                            
+                            // Elegant minimal divider
+                            VStack(spacing: 0) {
+                                let baseColor = habitColor
+                                Rectangle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.clear,
+                                                baseColor.opacity(colorScheme == .dark ? 0.2 : 0.15),
+                                                baseColor.opacity(colorScheme == .dark ? 0.3 : 0.4),
+                                                baseColor.opacity(colorScheme == .dark ? 0.2 : 0.15),
+                                                Color.clear
+                                            ],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .frame(height: 1.5)
+                                    //.padding(.horizontal, 10)
+                                    .opacity(0.8)
+                            }
+                            .padding(.bottom, 8)
+                            // Action buttons row
+                            HStack {
+                                // Menu button (ellipsis) - matches calendar button style
+                                Menu {
+                                    Button(action: {
+                                        showArchiveAlert = true
+                                    }) {
+                                        Label(habit.isArchived ? "Unarchive" : "Archive", systemImage: habit.isArchived ? "tray.and.arrow.up" : "tray.and.arrow.down")
+                                    }
+                                    
+                                    Button(role: .destructive, action: {
+                                        showDeleteAlert = true
+                                    }) {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                } label: {
+                                    Image(systemName: "ellipsis")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.primary)
+                                        .frame(width: 30, height: 30)
+                                }
+                                .glassButton()
+                                
+                                Spacer()
+                                
+                                // Playful Edit button (middle)
+                                Button(action: {
+                                    print("Edit button tapped")
+                                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                                    impactFeedback.prepare()
+                                    impactFeedback.impactOccurred()
+                                    
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showEditSheet.toggle()
+                                    }
+                                }) {
+                                    HStack(spacing: 6) {
+
+                                        Text("Edit Habit")
+                                            .customFont("Lexend", .semibold, 12)
+                                            .tracking(0.1)
+                                    }
+                                    .frame(width: 80, height: 30)
+                                    .foregroundColor(.primary)
+                                    
+                                }
+                                .glassButton()
+                                
+                                Spacer()
+                                
+                                // Calendar button (far right)
+                                Button(action: {
+                                    print("Calendar button tapped")
+                                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                                    impactFeedback.prepare()
+                                    impactFeedback.impactOccurred()
+                                    
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showCalendarSheet.toggle()
+                                    }
+                                }) {
+                                    Image(systemName: "calendar")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.primary)
+                                        .frame(width: 30, height: 30)
+                                }
+                                .glassButton()
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 8)
+                        }
+                        .padding(.horizontal)
+                        
                         
                     }
                     .ignoresSafeArea(.container, edges: .bottom)
-                }
-                .tag(1)
-                ScrollView {
-                    VStack(spacing: 14) {
-                        // Add spacing at the top to account for the navbar height
-                        Color.clear.frame(height: 10 )
-                        
-                         /*
-                        HabitScoreSection(habit: habit)
-                            .padding(.horizontal)
-                         */
-                        
-                        
-                        
-                        
-                    }
-                    .ignoresSafeArea(.container, edges: .bottom)
-                    //.padding(.bottom, 37) // Extra padding for tab indicator
-                }
-                .tag(2)
-                // Tab 2: Analytics - Consistency Chart + Calendar
-                ScrollView {
-                    VStack(spacing: 14) {
-                        // Add spacing at the top to account for the navbar height
-                        Color.clear.frame(height: 10)
-                        /*
-                        // Consistency Chart
-                        HabitConsistencyChart(habit: habit, refreshTrigger: $refreshChart)
-                            .padding(.horizontal)
-                            .transition(.opacity)
-                         
-                        */
-                        HabitAnalyticsView(habit: habit)
-                            .padding(.horizontal)
-                        
-                        /*
-                        HabitWeeklyCompletionChart(habit: habit)
-                            .padding(.horizontal)
-                        .transition(.opacity)
-                         */
-                        // Calendar and Completion View
-                        /*
-                        scheduleSection
-                            .transition(.opacity)
-                         */
-                        
-                    }
-                    .ignoresSafeArea(.container, edges: .bottom)
-                    //.padding(.bottom, 100) // Extra padding for tab indicator
-                }
-                .tag(3)
-                
-                
-                
+
             }
             .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
             .onAppear {
                 // Ensure we start on the first tab
-                selectedTab = 1
                 
                 if preloadedCalendarView == nil {
                         preloadedCalendarView = AnyView(
@@ -336,72 +405,26 @@ struct HabitDetailSheet: View {
                                 refreshTrigger: $refreshChart
                             )
                             .environment(\.managedObjectContext, viewContext)
-                            //.scaleEffect(0.9)
+                            
                         )
                     }
-            }
-            
-            // Custom Tab Indicator at bottom
-            VStack {
-                Spacer()
-                HStack(spacing: 8) {
-                    ForEach(0..<4, id: \.self) { index in
-                        Button(action: {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                selectedTab = index
-                            }
-                        }) {
-                            Group {
-                                if index == 1 {
-                                    // Special handling for habit icon (index 1)
-                                    TabIconView(
-                                        iconString: habit.icon,
-                                        isSelected: selectedTab == index,
-                                        habitColor: habitColor
-                                    )
-                                    .foregroundColor(selectedTab == index ? habitColor : .secondary.opacity(0.6))
-                                } else {
-                                    // Regular SF Symbol icons for other tabs
-                                    Image(systemName: tabIcon(for: index))
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundColor(selectedTab == index ? habitColor : .secondary.opacity(0.6))
-                                        .scaleEffect(selectedTab == index ? 1.1 : 1.0)
-                                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedTab)
-                                }
-                            }
-                            .frame(width: 22, height: 22)
-                        }
-                        .buttonStyle(PlainButtonStyle())
+                
+                // Load automation percentage for color matching
+                Task {
+                    let config = HabitAutomationConfig()
+                    let engine = HabitAutomationEngine(config: config, context: viewContext)
+                    let insight = engine.calculateAutomationPercentage(habit: habit)
+                    await MainActor.run {
+                        automationPercentage = insight.automationPercentage
                     }
                 }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                )
-                .padding(.bottom, 30)
             }
-            .zIndex(1)
-            /*
-            // Custom navbar - placed at the top of the ZStack to stay fixed
-            if selectedDetent != .height(470) {
-                UltraThinMaterialNavBar(
-                    title: "Habit Details",
-                    leftIcon: "xmark",
-                    rightIcon: nil, // Remove config icon since we removed customization
-                    leftAction: {
-                        isPresented = false
-                    },
-                    rightAction: nil,
-                    titleColor: .primary,
-                    leftIconColor: .secondary,
-                    rightIconColor: .secondary
-                )
-                .zIndex(2) // Ensure the navbar stays on top
-            }
-             */
+            
         }
+        .scrollContentBackground(.hidden)        // <- critical
+        .background(.clear)
+        .toolbarBackground(.clear, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .ignoresSafeArea(.container, edges: .bottom)
         .onChange(of: selectedCalendarDate) { oldDate, newDate in
             if let date = newDate {
@@ -410,6 +433,55 @@ struct HabitDetailSheet: View {
         }
         .onDisappear() {
             HabitUtilities.clearHabitActivityCache()
+        }
+        .sheet(isPresented: $showCalendarSheet) {
+            if let calendarView = preloadedCalendarView {
+                calendarView
+                    .presentationDetents([.fraction(0.70)])
+                    .presentationDragIndicator(.visible)
+            } else {
+                CalendarAndCompletionView(
+                    habit: habit,
+                    selectedCalendarDate: $selectedCalendarDate,
+                    calendarTitle: $calendarTitle,
+                    focusedWeek: $focusedWeek,
+                    isDraggingCalendar: $isDraggingCalendar,
+                    calendarDragProgress: $calendarDragProgress,
+                    getFilteredHabitsForDate: getFilteredHabitsForDate,
+                    refreshTrigger: $refreshChart
+                )
+                .environment(\.managedObjectContext, viewContext)
+                .presentationDetents([.fraction(0.67)])
+                .presentationDragIndicator(.visible)
+            }
+        }
+        .sheet(isPresented: $showAnalyticsSheet) {
+            HabitAnalyticsView(habit: habit)
+                .presentationDetents([.fraction(0.85)])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showEditSheet) {
+            EditHabitView(habit: habit)
+                .environment(\.managedObjectContext, viewContext)
+        }
+        .alert("Archive Habit", isPresented: $showArchiveAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button(habit.isArchived ? "Unarchive" : "Archive") {
+                toggleArchiveHabit()
+            }
+        } message: {
+            Text(habit.isArchived ? 
+                 "Are you sure you want to unarchive \"\(habit.name ?? "this habit")\"?" :
+                 "Are you sure you want to archive \"\(habit.name ?? "this habit")\"? This will hide it from your main view.")
+        }
+        .alert("Delete Habit", isPresented: $showDeleteAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                deleteHabit()
+                isPresented = false
+            }
+        } message: {
+            Text("Are you sure you want to permanently delete \"\(habit.name ?? "this habit")\"? This action cannot be undone.")
         }
     }
     
@@ -441,6 +513,27 @@ struct HabitDetailSheet: View {
             return "\(value)" // Already includes minus sign
         } else {
             return "0"
+        }
+    }
+    
+    // Helper functions for habit actions
+    private func toggleArchiveHabit() {
+        habit.isArchived.toggle()
+        do {
+            try viewContext.save()
+            HabitUtilities.clearHabitActivityCache()
+        } catch {
+            print("Error toggling archive status: \(error)")
+        }
+    }
+    
+    private func deleteHabit() {
+        viewContext.delete(habit)
+        do {
+            try viewContext.save()
+            HabitUtilities.clearHabitActivityCache()
+        } catch {
+            print("Error deleting habit: \(error)")
         }
     }
     
@@ -1032,58 +1125,6 @@ struct HabitDetailSheet: View {
         .padding(.top, -5)
     }
 }
-/*
-struct MetricCard: View {
-    let value: String
-    let label: String
-    let icon: String
-    let color: Color
-    
-    @Environment(\.colorScheme) private var colorScheme
-    
-    var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundColor(color)
-            
-            Text(value)
-                .font(.title3)
-                .fontWeight(.bold)
-                .foregroundColor(.primary)
-            
-            Text(label)
-                .font(.caption2)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .padding(.horizontal, 5)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(colorScheme == .dark ? Color.black.opacity(0.3) : color.opacity(0.1))
-        )
-    }
-}
-*/
-
-
-/*
-#if DEBUG
-struct HabitDetailSheet_Previews: PreviewProvider {
-    static var previews: some View {
-        HabitDetailSheet(
-            habit: Habit(),
-            date: Date(),
-            isPresented: .constant(true)
-        )
-    }
-}
-#endif
-*/
 
 struct ExpandSheetButton: View {
     let action: () -> Void

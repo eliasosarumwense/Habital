@@ -50,6 +50,7 @@ public struct PieChartView: View {
                 .cornerRadius(20)
                 .shadow(color: self.style.dropShadowColor, radius: self.dropShadow ? 12 : 0)
             VStack(alignment: .leading) {
+                /*
                 HStack {
                     if(!showValue) {
                         Text(self.title)
@@ -61,10 +62,13 @@ public struct PieChartView: View {
                             .foregroundColor(self.style.textColor)
                     }
                     Spacer()
+                    /*
                     Image(systemName: "chart.pie.fill")
                         .imageScale(.large)
                         .foregroundColor(self.style.legendTextColor)
+                     */
                 }.padding()
+                 */
                 PieChartRow(
                     data: data,
                     colors: colors,  // Pass colors to PieChartRow
@@ -76,12 +80,14 @@ public struct PieChartView: View {
                 .foregroundColor(self.style.accentColor)
                 .padding(self.legend != nil ? 0 : 12)
                 .offset(y: self.legend != nil ? 0 : -10)
+                /*
                 if(self.legend != nil) {
                     Text(self.legend!)
                         .font(.headline)
                         .foregroundColor(self.style.legendTextColor)
                         .padding()
                 }
+                 */
             }
         }.frame(width: self.formSize.width, height: self.formSize.height)
     }

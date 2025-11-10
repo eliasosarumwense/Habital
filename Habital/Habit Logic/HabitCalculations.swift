@@ -113,6 +113,16 @@ public struct HabitUtilities {
             }
         }
         
+        // Get repeats per day for a habit on a specific date
+        static func getRepeatsPerDay(for habit: Habit, on date: Date) -> Int {
+            return habit.currentRepeatsPerDay(on: date)
+        }
+        
+        // Get completed repeats count for a habit on a specific date
+        static func getCompletedRepeatsCount(for habit: Habit, on date: Date) -> Int {
+            return habit.completedCount(on: date)
+        }
+        
         // Get duration completed for a specific date
         static func getDurationCompleted(for habit: Habit, on date: Date) -> Int {
             guard let completions = habit.completion as? Set<Completion> else { return 0 }

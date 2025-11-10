@@ -24,6 +24,9 @@ struct DayView: View {
        @EnvironmentObject private var habitManager: HabitPreloadManager
        @Environment(\.colorScheme) private var colorScheme
        @Environment(\.managedObjectContext) private var viewContext
+    
+       // 🔄 Observe toggle manager for completion changes
+       @ObservedObject var toggleManager: HabitToggleManager
        
        let refreshTrigger: UUID
        let isShownInHabitDetails: Bool?
@@ -49,6 +52,8 @@ struct DayView: View {
            let habits = !isDragging ? getFilteredHabits(date) : []
            
            // ✅ Use optimized calculation with dayKey
+           // Force recalculation by accessing the observed property
+           let _ = toggleManager.completionVersion
            let (hasActiveHabits, completionPercentage, ringColors) = (showEllipse && !isDragging) ?
                calculateHabitDataOptimized(habits: habits, dayKey: dayKey) : (false, 0.0, [Color]())
            
@@ -225,6 +230,7 @@ struct DayView: View {
            .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isSelected)
            .animation(.spring(response: 0.8, dampingFraction: 0.8), value: shouldAnimateRings)
            .animation(.easeOut(duration: 1.5), value: shouldAnimateRings)
+           .animation(.spring(response: 0.3, dampingFraction: 0.8), value: toggleManager.completionVersion)
            
            .onChange(of: isDragging) { _, newValue in
                if !newValue {
@@ -253,6 +259,7 @@ struct DayView: View {
        
        // MARK: - ✅ OPTIMIZED Calculation using dayKey
        
+    
        private func calculateHabitDataOptimized(habits: [Habit], dayKey: String) -> (hasActiveHabits: Bool, completionPercentage: Double, ringColors: [Color]) {
            // Check if future date
            let isFuture = date > Date()
@@ -314,29 +321,32 @@ struct DayView: View {
        }
        
        // Keep your existing helper methods
+    @ViewBuilder
     private func liquidGlassBackground(isSelected: Bool, isToday: Bool) -> some View {
-        ZStack {
-            // Base rounded rectangle - nearly transparent
-            RoundedRectangle(cornerRadius: isSelected ? 14 : 10, style: .continuous)
-                .fill(Color.primary.opacity(0.02))
-            
-            // Selection state
-            if isSelected {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(accentColor.opacity(0.12))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(accentColor.opacity(0.3), lineWidth: 1.6)
-                    )
-            }
-            
-            // Today indicator (only when not selected)
-            if isToday && !isSelected {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.red.opacity(0.4), lineWidth: 1.0)
+
+            ZStack {
+                // Base rounded rectangle - nearly transparent
+                RoundedRectangle(cornerRadius: isSelected ? 14 : 10, style: .continuous)
+                    .fill(Color.primary.opacity(0.02))
+                
+                // Selection state
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(accentColor.opacity(0.12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(accentColor.opacity(0.3), lineWidth: 1.6)
+                        )
+                }
+                
+                // Today indicator (only when not selected)
+                if isToday && !isSelected {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Color.red.opacity(0.4), lineWidth: 1.0)
+                }
             }
         }
-    }
+    
        
        private func getDayInDFormat(from date: Date) -> String {
            let formatter = DateFormatter()

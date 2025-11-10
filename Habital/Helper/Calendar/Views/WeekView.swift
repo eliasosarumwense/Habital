@@ -1,7 +1,5 @@
 import SwiftUI
 
-import SwiftUI
-
 struct WeekView: View {
     let week: Week
     let dragProgress: CGFloat
@@ -15,6 +13,9 @@ struct WeekView: View {
     
     @Binding var selectedDate: Date?
     
+    // 🔄 Add toggleManager to observe completion changes
+    @ObservedObject var toggleManager: HabitToggleManager
+    
     let isShownInHabitDetails: Bool?
     let habitColor: Color?
     
@@ -26,6 +27,7 @@ struct WeekView: View {
         getFilteredHabits: @escaping (Date) -> [Habit] = { _ in [] },
         animateRings: Bool = false,
         isDragging: Binding<Bool>,
+        toggleManager: HabitToggleManager,
         refreshTrigger: UUID = UUID(), // Add parameter with default value
         isShownInHabitDetails: Bool? = nil,
         habitColor: Color? = nil
@@ -35,6 +37,7 @@ struct WeekView: View {
         self.hideDifferentMonth = hideDifferentMonth
         self.getFilteredHabits = getFilteredHabits
         self.animateRings = animateRings
+        self.toggleManager = toggleManager
         self.refreshTrigger = refreshTrigger // Store the refresh trigger
         _selectedDate = selectedDate
         _isDragging = isDragging
@@ -51,16 +54,18 @@ struct WeekView: View {
                     getFilteredHabits: getFilteredHabits,
                     animateRings: animateRings,
                     isDragging: $isDragging,
+                    toggleManager: toggleManager,
                     refreshTrigger: refreshTrigger, // Pass the refresh trigger
                     isShownInHabitDetails: isShownInHabitDetails,
                     habitColor: habitColor
                 )
                 .opacity(isDayVisible(for: date) ? 1 : (1 - dragProgress))
                 .frame(maxWidth: .infinity)
-                
+                /*
                 if week.days.last != date {
                     Spacer()
                 }
+                 */
             }
         }
         .padding(.horizontal)

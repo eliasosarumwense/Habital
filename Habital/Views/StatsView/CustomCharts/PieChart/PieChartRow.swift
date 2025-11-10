@@ -46,7 +46,7 @@ public struct PieChartRow: View {
     public var body: some View {
         GeometryReader { geometry in
             ZStack {
-                ForEach(0..<self.slices.count) { i in
+                ForEach(self.slices.indices, id: \.self) { i in
                     PieChartCell(
                         rect: geometry.frame(in: .local),
                         startDeg: self.slices[i].startDeg,
@@ -56,7 +56,7 @@ public struct PieChartRow: View {
                         accentColor: self.slices[i].color  // Use slice-specific color
                     )
                     .scaleEffect(self.currentTouchedIndex == i ? 1.1 : 1)
-                    .animation(Animation.spring())
+                    .animation(.spring(), value: self.currentTouchedIndex)
                 }
             }
             .gesture(DragGesture()

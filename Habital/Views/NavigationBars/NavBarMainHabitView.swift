@@ -8,6 +8,13 @@
 import SwiftUI
 import CoreData
 
+extension Color {
+    /// Creates a milky/pastel version of the color by mixing it with white
+    func milky(intensity: Double = 0.7) -> Color {
+        return self.opacity(intensity)
+    }
+}
+
 // Keep the existing HabitSortOption enum unchanged
 enum HabitSortOption: String, CaseIterable, Identifiable {
     case ascending = "Ascending (A-Z)"
@@ -307,11 +314,20 @@ struct NavBarMainHabitView: View {
                 .frame(width: 110)
                 
                 ZStack {
-                    Text(subtitleText)
-                        .id(subtitleID)
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundColor(.secondary)
-                        .transition(titleTransition)
+                    HStack(spacing: 4) {
+                        // Only show dot if we're not in "All Habits" (selectedListIndex > 0)
+                        if selectedListIndex > 0 {
+                            Circle()
+                                .fill(titleDotColor)
+                                .frame(width: 6, height: 6)
+                        }
+                        
+                        Text(subtitleText)
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundColor(.secondary)
+                    }
+                    .id(subtitleID)
+                    .transition(titleTransition)
                 }
                 .animation(anim, value: subtitleID)
             }
@@ -404,8 +420,9 @@ struct NavBarMainHabitView: View {
                 Menu {
                     listMenuContent
                 } label: {
-                    Label("Lists", systemImage: currentListIcon)
-                        .foregroundStyle(currentListColor)
+                    Image(systemName: currentListIcon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(currentListColor)
                 }
             }
         }
@@ -542,18 +559,33 @@ struct NavBarMainHabitView: View {
     
     private var currentListColor: Color {
         if showArchivedHabits {
-            return .orange
+            return .orange.opacity(0.7)
         } else if selectedListIndex == 0 {
-            return .blue
+            // No list selected - use custom tint based on color scheme
+            return colorScheme == .dark ? Color(hexString: "C9D4FF") : Color(hexString: "4050B5")
         } else if selectedListIndex > 0 && selectedListIndex <= habitLists.count {
             let list = Array(habitLists)[selectedListIndex - 1]
             if let colorData = list.color,
                let uiColor = try? NSKeyedUnarchiver.unarchivedObject(ofClass: UIColor.self, from: colorData) {
-                return Color(uiColor)
+                return Color(uiColor).opacity(0.7)
             }
-            return .accentColor
+            return colorScheme == .dark ? Color(hexString: "C9D4FF") : Color(hexString: "4050B5")
         }
-        return .accentColor
+        return colorScheme == .dark ? Color(hexString: "C9D4FF") : Color(hexString: "4050B5")
+    }
+    
+    // Separate color for the dot indicator in the title (with milky effect)
+    private var titleDotColor: Color {
+        if showArchivedHabits {
+            return .orange.milky()
+        } else if selectedListIndex > 0 && selectedListIndex <= habitLists.count {
+            let list = Array(habitLists)[selectedListIndex - 1]
+            if let colorData = list.color,
+               let uiColor = try? NSKeyedUnarchiver.unarchivedObject(ofClass: UIColor.self, from: colorData) {
+                return Color(uiColor).milky()
+            }
+        }
+        return colorScheme == .dark ? Color(hexString: "C9D4FF") : Color(hexString: "4050B5")
     }
     
     private func getCurrentList() -> HabitList? {

@@ -1473,12 +1473,28 @@ extension Habit {
         var currentDate = referenceDay
         let maxDaysToCheck = 500 // Reasonable limit
         
-        // Handle today specially if reference is today and not completed
+        // Handle today specially based on habit type
         let isReferenceToday = calendar.isDate(referenceDay, inSameDayAs: todayDate)
-        if isReferenceToday && !isCompletedFromDict(on: todayDate, completionDict: completionDict) {
-            // Don't count today if not completed, start from yesterday
-            if let yesterday = calendar.date(byAdding: .day, value: -1, to: todayDate) {
-                currentDate = yesterday
+        if isReferenceToday {
+            let isCompletedToday = isCompletedFromDict(on: todayDate, completionDict: completionDict)
+            
+            if self.isBadHabit {
+                // For bad habits: if completed today (habit was done), streak is broken
+                if !isCompletedToday {
+                    // Bad habit was broken today, streak is 0
+                    return 0
+                }
+                // If avoided (completed), continue checking from yesterday
+                if let yesterday = calendar.date(byAdding: .day, value: -1, to: todayDate) {
+                    currentDate = yesterday
+                }
+            } else {
+                // For good habits: if not completed today, don't count it but check yesterday
+                if !isCompletedToday {
+                    if let yesterday = calendar.date(byAdding: .day, value: -1, to: todayDate) {
+                        currentDate = yesterday
+                    }
+                }
             }
         }
         
@@ -1823,6 +1839,7 @@ extension Habit {
         // Save immediately to keep cache consistent
         do {
             try context.save()
+            HabitUtilities.clearHabitActivityCache()
         } catch {
             print("Error updating total completions: \(error)")
         }
@@ -1837,6 +1854,7 @@ extension Habit {
             
             do {
                 try context.save()
+                HabitUtilities.clearHabitActivityCache()
             } catch {
                 print("Error syncing total completions: \(error)")
             }

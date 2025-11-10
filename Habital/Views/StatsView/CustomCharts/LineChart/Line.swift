@@ -76,14 +76,14 @@ public struct Line: View {
                     .rotationEffect(.degrees(180), anchor: .center)
                     .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
                     .transition(.opacity)
-                    .animation(.easeIn(duration: 1.6))
+                    .animation(.easeIn(duration: 1.6), value: showFull)
             }
             self.path
                 .trim(from: 0, to: self.showFull ? 1:0)
                 .stroke(gradient.start, style: StrokeStyle(lineWidth: 5, lineJoin: .round))
                 .rotationEffect(.degrees(180), anchor: .center)
                 .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
-                .animation(Animation.easeOut(duration: 1.2).delay(Double(self.index)*0.4))
+                .animation(.easeOut(duration: 1.2).delay(Double(self.index)*0.4), value: showFull)
                 .onAppear {
                     self.showFull = true
                 }

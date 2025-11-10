@@ -74,17 +74,14 @@ struct HabitAnalyticsView: View {
         ScrollView {
             VStack(spacing: 14) {
                 if let insight = viewModel.insight {
-                    // Show automation analysis
-                    AutomationSection(insight: insight, habit: habit)
+                    // Show automation card styled exactly like HabitAutomationBarCard
+                    HabitAutomationView(insight: insight, habit: habit)
+                        .padding(.horizontal)
+                        .padding(.top)
                     
-                    /*
-                    // Show predictive insights if available
-                    if let predictions = insight.predictions {
-                        PredictiveInsightsSection(predictions: predictions, currentAutomation: insight.automationPercentage)
-                    }
-                    */
                     // Show minimal 30-day chart
                     MinimalHabitChartView(habit: habit)
+                        .padding(.horizontal)
                     
                 } else if viewModel.isLoading {
                     ProgressView("Analyzing habit formation...")
@@ -106,7 +103,6 @@ struct HabitAnalyticsView: View {
                     )
                 }
             }
-           
         }
         .task {
             await viewModel.loadAnalytics(context: viewContext)
@@ -117,107 +113,387 @@ struct HabitAnalyticsView: View {
     }
 }
 
-// MARK: - Automation Section
-struct AutomationSection: View {
+// MARK: - Habit Automation View (styled like HabitAutomationBarCard)
+struct HabitAutomationView: View {
     let insight: HabitAutomationInsight
     let habit: Habit
+    @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.colorScheme) private var colorScheme
     
+    @State private var animatedProgress: CGFloat = 0
+    @State private var animatedPercentage: Double = 0
+    @State private var thirtyDayImprovement: Double?
+    @State private var isDataLoaded: Bool = false
+    
+    enum InsightType: String, CaseIterable {
+        case recovery = "Recovery Potential"
+        case peak = "Peak Performance"
+        case foundation = "Baseline"
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(sectionTitle, systemImage: "brain")
-                .font(.customFont("Lexend", .medium, 18))
+        let percentage = insight.automationPercentage
+        let colors = getAutomationColors(for: percentage)
+        
+        VStack(alignment: .leading, spacing: 8) {
+            // Title and percentage with 30-day improvement
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Automation")
+                    .font(.customFont("Lexend", .semibold, 15))
+                    .foregroundStyle(.primary)
+                
+                Spacer()
+                
+                // 30-day improvement indicator
+                if let improvementValue = thirtyDayImprovement {
+                    HStack(spacing: 3) {
+                        Image(systemName: getImprovementIcon(for: improvementValue))
+                            .font(.caption2)
+                            .foregroundStyle(getImprovementColor(for: improvementValue))
+                        Text("\(improvementValue >= 0 ? "+" : "")\(Int(improvementValue))%")
+                            .font(.customFont("Lexend", .medium, 10))
+                            .foregroundStyle(.secondary)
+                    }
+                    .opacity(isDataLoaded ? 1.0 : 0.0)
+                    .animation(.easeInOut(duration: 0.4).delay(1.2), value: isDataLoaded)
+                }
+                
+                Text("\(Int(animatedPercentage))%")
+                    .font(.customFont("Lexend", .bold, 20))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: colors,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+            }
             
-            VStack(alignment: .leading, spacing: 8) {
-                // Progress bar showing automation level
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(.quaternary)
-                            .frame(height: 40)
-                        
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(LinearGradient(
-                                colors: automationColors(for: insight.automationPercentage),
+            // Main progress bar
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Background track
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.secondary.opacity(0.15))
+                        .frame(height: 20)
+                    
+                    // Animated progress fill
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(
+                            LinearGradient(
+                                colors: colors,
                                 startPoint: .leading,
                                 endPoint: .trailing
-                            ))
-                            .frame(width: geometry.size.width * (insight.automationPercentage / 100.0), height: 40)
-                        
-                        HStack {
-                            Text("\(Int(insight.automationPercentage))% \(habit.isBadHabit ? "Controlled" : "Automated")")
-                                .font(.customFont("Lexend", .medium, 13))
-                                .foregroundStyle(insight.automationPercentage > 20 ? .white : (colorScheme == .dark ? .white : .primary))
-                                .padding(.horizontal, 12)
-                            
-                            Spacer()
-                            
-                            if let predictions = insight.predictions,
-                               let daysTo95 = predictions.estimatedDaysTo95Percent {
-                                Text(formatDaysToTarget(daysTo95))
-                                    .font(.customFont("Lexend", .regular, 11))
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 12)
-                            } else if insight.automationPercentage >= 95 {
-                                Label(habit.isBadHabit ? "Fully Controlled!" : "Fully Automated!", systemImage: "star.fill")
-                                    .font(.customFont("Lexend", .medium, 11))
-                                    .foregroundStyle(.yellow)
-                                    .padding(.horizontal, 12)
-                            }
-                        }
-                    }
+                            )
+                        )
+                        .frame(width: animatedProgress * geometry.size.width, height: 20)
+                        .overlay(
+                            // Shimmer effect for active progress
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0),
+                                            Color.white.opacity(0.3),
+                                            Color.white.opacity(0)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: animatedProgress * geometry.size.width)
+                        )
                 }
-                .frame(height: 40)
+            }
+            .frame(height: 20)
+            
+            // Status and target info
+            HStack(spacing: 8) {
+                // Status badge
+                HStack(spacing: 4) {
+                    Image(systemName: getStatusIcon(for: percentage))
+                        .font(.caption2)
+                    Text(getStatusText(for: percentage))
+                        .font(.customFont("Lexend", .medium, 10))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .foregroundStyle(colors[0])
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(colors[0].opacity(0.15))
+                .clipShape(Capsule())
+                .opacity(isDataLoaded ? 1.0 : 0.3)
+                .animation(.easeInOut(duration: 0.4), value: isDataLoaded)
                 
-                Text(descriptionText)
-                    .font(.customFont("Lexend", .regular, 12))
-                    .foregroundStyle(.secondary)
+                Spacer()
                 
-                // Status indicators based on automation level
-                HStack(spacing: 8) {
-                    if insight.automationPercentage >= 70 {
-                        Label(habit.isBadHabit ? "Breaking Free" : "Well Established", systemImage: "checkmark.seal.fill")
-                            .font(.customFont("Lexend", .medium, 11))
-                            .foregroundStyle(.green)
-                    } else if insight.automationPercentage >= 40 {
-                        Label(habit.isBadHabit ? "Gaining Control" : "Building Momentum", systemImage: "arrow.up.circle.fill")
-                            .font(.customFont("Lexend", .medium, 11))
-                            .foregroundStyle(.blue)
-                    } else if insight.automationPercentage >= 20 {
-                        Label(habit.isBadHabit ? "Making Progress" : "Early Stage", systemImage: "sparkles")
-                            .font(.customFont("Lexend", .medium, 11))
-                            .foregroundStyle(.orange)
-                    } else {
-                        Label("Just Starting", systemImage: "leaf.fill")
-                            .font(.customFont("Lexend", .medium, 11))
+                // Days to 95% target
+                if let predictions = insight.predictions,
+                   let daysTo95 = predictions.estimatedDaysTo95Percent {
+                    Text(formatDaysToTarget(daysTo95))
+                        .font(.customFont("Lexend", .regular, 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                } else if percentage >= 95 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "star.fill")
+                            .font(.caption2)
                             .foregroundStyle(.yellow)
-                    }
-                    
-                    if insight.currentStreak > 7 {
-                        Label("\(insight.currentStreak) Day\(habit.isBadHabit ? "s Free!" : " Streak!")", systemImage: "flame.fill")
-                            .font(.customFont("Lexend", .medium, 11))
-                            .foregroundStyle(.orange)
+                        Text(habit.isBadHabit ? "Controlled!" : "Automated!")
+                            .font(.customFont("Lexend", .medium, 10))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
                     }
                 }
             }
+            .padding(.bottom, 4)
+            
+            // Bottom row with adaptive insight
+            HStack(spacing: 1) {
+                adaptiveInsightView
+                
+                Spacer()
+            }
+            .padding(.top, -1)
         }
-        .padding()
+        .padding(12)
         .glassBackground()
-    }
-    
-    private var sectionTitle: String {
-        habit.isBadHabit ? "Habit Breaking Progress" : "Habit Automation Progress"
-    }
-    
-    private var descriptionText: String {
-        if habit.isBadHabit {
-            return "Control level measures how automatic avoiding this habit has become. Higher values mean less temptation and easier resistance."
-        } else {
-            return "Automaticity measures how automatic this habit has become. Higher values mean less willpower needed."
+        .onAppear {
+            Task {
+                await loadAutomationData()
+            }
         }
     }
     
-    private func automationColors(for percentage: Double) -> [Color] {
+    // MARK: - Async Data Loading
+    @MainActor
+    private func loadAutomationData() async {
+        // Load 30-day improvement if habit is old enough
+        let habitAge = Calendar.current.dateComponents([.day], from: habit.startDate ?? Date(), to: Date()).day ?? 0
+        if habitAge >= 30 {
+            let improvement = await Task.detached {
+                return calculate30DayImprovement()
+            }.value
+            self.thirtyDayImprovement = improvement
+        }
+        
+        // Mark data as loaded for smooth transition
+        withAnimation(.easeInOut(duration: 0.3)) {
+            self.isDataLoaded = true
+        }
+        
+        // Wait for 0.3 seconds before animating progress bar and percentage
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        
+        // Animate percentage counter with custom timing curve
+        animatePercentageCounter(to: insight.automationPercentage)
+        
+        // Animate progress bar after delay
+        withAnimation(.spring(response: 0.8, dampingFraction: 0.85)) {
+            self.animatedProgress = CGFloat(insight.automationPercentage / 100)
+        }
+    }
+    
+    // MARK: - 30-Day Improvement Helper
+    private func calculate30DayImprovement() -> Double {
+        let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        
+        // Calculate current automation percentage
+        let currentConfig = HabitAutomationConfig()
+        let currentEngine = HabitAutomationEngine(config: currentConfig, context: viewContext)
+        let currentInsight = currentEngine.calculateAutomationPercentage(habit: habit)
+        let currentPercentage = currentInsight.automationPercentage
+        
+        // Calculate automation percentage 30 days ago
+        var oldConfig = HabitAutomationConfig()
+        oldConfig.analysisEnd = thirtyDaysAgo
+        let oldEngine = HabitAutomationEngine(config: oldConfig, context: viewContext)
+        let oldInsight = oldEngine.calculateAutomationPercentage(habit: habit)
+        let oldPercentage = oldInsight.automationPercentage
+        
+        return currentPercentage - oldPercentage
+    }
+    
+    private func animatePercentageCounter(to targetPercentage: Double) {
+        animatedPercentage = 0
+        let totalDuration: TimeInterval = 0.88
+        let updateInterval: TimeInterval = 0.016
+        let totalSteps = Int(totalDuration / updateInterval)
+        
+        func customEasingFunction(progress: Double) -> Double {
+            return 1 - pow(1 - progress, 2.5)
+        }
+        
+        Task {
+            for step in 0...totalSteps {
+                let progress = Double(step) / Double(totalSteps)
+                let easedProgress = customEasingFunction(progress: progress)
+                let currentValue = targetPercentage * easedProgress
+                
+                await MainActor.run {
+                    let roundedValue = round(currentValue * 10) / 10
+                    self.animatedPercentage = min(targetPercentage, roundedValue)
+                }
+                
+                try? await Task.sleep(nanoseconds: UInt64(updateInterval * 1_000_000_000))
+            }
+            
+            await MainActor.run {
+                self.animatedPercentage = round(targetPercentage * 10) / 10
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var adaptiveInsightView: some View {
+        let historyAnalysis = insight.historyAnalysis
+        
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 0) {
+                // Recovery Potential (preferred when available and meaningful > 5%)
+                if let historyAnalysis = historyAnalysis, historyAnalysis.recoveryPotential > 0.05 {
+                    recoveryPotentialBottomView(historyAnalysis: historyAnalysis)
+                    
+                    // Middle dot separator and Baseline
+                    Text(" • ")
+                        .font(.customFont("Lexend", .medium, 9))
+                        .foregroundStyle(.secondary.opacity(0.5))
+                        .opacity(isDataLoaded ? 1.0 : 0.0)
+                        .animation(.easeInOut(duration: 0.4).delay(1.1), value: isDataLoaded)
+                    
+                    experienceFloorView(historyAnalysis: historyAnalysis)
+                }
+                // Peak Performance (fallback when recovery potential is low) + Baseline
+                else if let historyAnalysis = historyAnalysis, historyAnalysis.peakStrength > 0 {
+                    peakComparisonView(historyAnalysis: historyAnalysis)
+                    
+                    // Middle dot separator and Baseline
+                    Text(" • ")
+                        .font(.customFont("Lexend", .medium, 9))
+                        .foregroundStyle(.secondary.opacity(0.5))
+                        .opacity(isDataLoaded ? 1.0 : 0.0)
+                        .animation(.easeInOut(duration: 0.4).delay(1.1), value: isDataLoaded)
+                    
+                    experienceFloorView(historyAnalysis: historyAnalysis)
+                } 
+                // Baseline only
+                else if let historyAnalysis = historyAnalysis {
+                    experienceFloorView(historyAnalysis: historyAnalysis)
+                }
+                
+                Spacer()
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func recoveryPotentialBottomView(historyAnalysis: HabitHistoryAnalysis?) -> some View {
+        if let historyAnalysis = historyAnalysis, historyAnalysis.recoveryPotential > 0.05 {
+            let recoveryPotential = historyAnalysis.recoveryPotential
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.up.heart.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.green.opacity(0.5))
+                
+                Text("Recovery +\(Int(recoveryPotential * 100))%")
+                    .font(.customFont("Lexend", .medium, 10))
+                    .foregroundStyle(.primary.opacity(0.8))
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(.secondary.opacity(0.1))
+            .clipShape(Capsule())
+            .opacity(isDataLoaded ? 1.0 : 0.0)
+            .animation(.easeInOut(duration: 0.4).delay(1.0), value: isDataLoaded)
+        }
+    }
+    
+    @ViewBuilder
+    private func peakComparisonView(historyAnalysis: HabitHistoryAnalysis?) -> some View {
+        if let historyAnalysis = historyAnalysis, historyAnalysis.peakStrength > 0 {
+            let currentStrength = historyAnalysis.currentStrength
+            let peakStrength = historyAnalysis.peakStrength
+            let percentageOfPeak = (currentStrength / peakStrength) * 100
+            HStack(spacing: 4) {
+                Image(systemName: percentageOfPeak >= 80 ? "mountain.2.fill" : "mountain.2")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.purple.opacity(0.5))
+                
+                Text("\(Int(percentageOfPeak))% Peak")
+                    .font(.customFont("Lexend", .medium, 10))
+                    .foregroundStyle(.primary.opacity(0.8))
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(.secondary.opacity(0.1))
+            .clipShape(Capsule())
+            .opacity(isDataLoaded ? 1.0 : 0.0)
+            .animation(.easeInOut(duration: 0.4).delay(1.0), value: isDataLoaded)
+        }
+    }
+    
+    @ViewBuilder
+    private func experienceFloorView(historyAnalysis: HabitHistoryAnalysis?) -> some View {
+        if let historyAnalysis = historyAnalysis {
+            let experienceFloor = historyAnalysis.experienceFloor
+            HStack(spacing: 4) {
+                Image(systemName: "flag.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.orange.opacity(0.5))
+                
+                Text("Baseline \(Int(experienceFloor * 100))%")
+                    .font(.customFont("Lexend", .medium, 10))
+                    .foregroundStyle(.primary.opacity(0.8))
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(.secondary.opacity(0.1))
+            .clipShape(Capsule())
+            .opacity(isDataLoaded ? 1.0 : 0.0)
+            .animation(.easeInOut(duration: 0.4).delay(1.2), value: isDataLoaded)
+        }
+    }
+    
+    // MARK: - Helper Functions
+    private func getImprovementIcon(for improvement: Double) -> String {
+        if improvement > 0 {
+            return "arrow.up.right"
+        } else if improvement < 0 {
+            return "arrow.down.right"
+        } else {
+            return ""
+        }
+    }
+    
+    private func getImprovementColor(for improvement: Double) -> Color {
+        if improvement > 0 {
+            return .green
+        } else if improvement < 0 {
+            return .red
+        } else {
+            return .gray
+        }
+    }
+    
+    private func formatDaysToTarget(_ days: Int) -> String {
+        let targetText = habit.isBadHabit ? "95% control" : "95%"
+        
+        if days <= 7 {
+            return "~\(days) days to \(targetText)"
+        } else if days <= 14 {
+            return "~2 weeks to \(targetText)"
+        } else if days <= 30 {
+            return "~\(days / 7) weeks to \(targetText)"
+        } else if days <= 90 {
+            return "~\(days / 30) months to \(targetText)"
+        } else {
+            return "3+ months to \(targetText)"
+        }
+    }
+    
+    private func getAutomationColors(for percentage: Double) -> [Color] {
         if habit.isBadHabit {
             // For bad habits: red = still doing it, green = successfully avoiding
             if percentage < 30 {
@@ -239,320 +515,321 @@ struct AutomationSection: View {
         }
     }
     
-    private func formatDaysToTarget(_ days: Int) -> String {
-        let targetText = habit.isBadHabit ? "95% control" : "95%"
+    private func getStatusIcon(for percentage: Double) -> String {
+        guard isDataLoaded else {
+            return "clock.fill"
+        }
         
-        if days <= 7 {
-            return "~\(days) days to \(targetText)"
-        } else if days <= 14 {
-            return "~2 weeks to \(targetText)"
-        } else if days <= 30 {
-            return "~\(days / 7) weeks to \(targetText)"
-        } else if days <= 90 {
-            return "~\(days / 30) months to \(targetText)"
+        let improvement = thirtyDayImprovement
+        let isImproving = improvement != nil && improvement! > 0
+        let isDecline = improvement != nil && improvement! < -5
+        let isBigImprovement = improvement != nil && improvement! > 10
+        let isSignificantDecline = improvement != nil && improvement! < -15
+        
+        let historyAnalysis = insight.historyAnalysis
+        let hasRecoveryPotential = historyAnalysis?.recoveryPotential ?? 0 > 0.15
+        let hasHighRecoveryPotential = historyAnalysis?.recoveryPotential ?? 0 > 0.30
+        let hasStrongFoundation = historyAnalysis?.experienceFloor ?? 0 > 0.25
+        
+        if habit.isBadHabit {
+            if percentage >= 95 {
+                return "shield.fill"
+            } else if percentage >= 80 {
+                if isSignificantDecline {
+                    return "exclamationmark.triangle.fill"
+                } else if hasHighRecoveryPotential {
+                    return "arrow.up.heart.fill"
+                } else if isBigImprovement {
+                    return "arrow.up.circle.fill"
+                } else {
+                    return "hand.raised.fill"
+                }
+            } else if percentage >= 60 {
+                if isSignificantDecline {
+                    return "arrow.down.circle.fill"
+                } else if hasRecoveryPotential {
+                    return "arrow.up.heart"
+                } else if isBigImprovement {
+                    return "arrow.up.right.circle.fill"
+                } else if isImproving {
+                    return "plus.circle.fill"
+                } else {
+                    return "pause.circle.fill"
+                }
+            } else if percentage >= 40 {
+                if isDecline {
+                    return "arrow.down.circle.fill"
+                } else if hasRecoveryPotential {
+                    return "memorychip.fill"
+                } else if isImproving {
+                    return "arrow.up.right.circle.fill"
+                } else {
+                    return "clock.fill"
+                }
+            } else if percentage >= 20 {
+                return hasStrongFoundation ? "building.columns.fill" : (isDecline ? "minus.circle.fill" : "plus.circle.fill")
+            } else {
+                return isDecline ? "xmark.circle.fill" : "circle.dashed"
+            }
         } else {
-            return "3+ months to \(targetText)"
+            if percentage >= 95 {
+                return "checkmark.seal.fill"
+            } else if percentage >= 80 {
+                if isSignificantDecline {
+                    return "exclamationmark.triangle.fill"
+                } else if hasHighRecoveryPotential {
+                    return "arrow.up.heart.fill"
+                } else if isBigImprovement {
+                    return "arrow.up.circle.fill"
+                } else {
+                    return "checkmark.circle.fill"
+                }
+            } else if percentage >= 60 {
+                if isSignificantDecline {
+                    return "arrow.down.circle.fill"
+                } else if hasRecoveryPotential {
+                    return "arrow.up.heart"
+                } else if isBigImprovement {
+                    return "arrow.up.right.circle.fill"
+                } else if isImproving {
+                    return "plus.circle.fill"
+                } else {
+                    return "pause.circle.fill"
+                }
+            } else if percentage >= 40 {
+                if isDecline {
+                    return "arrow.down.circle.fill"
+                } else if hasRecoveryPotential {
+                    return "memorychip.fill"
+                } else if isImproving {
+                    return "arrow.up.right.circle.fill"
+                } else {
+                    return "clock.fill"
+                }
+            } else if percentage >= 20 {
+                return hasStrongFoundation ? "building.columns.fill" : (isDecline ? "minus.circle.fill" : "plus.circle.fill")
+            } else {
+                return isDecline ? "xmark.circle.fill" : "circle.dashed"
+            }
+        }
+    }
+    
+    private func getStatusText(for percentage: Double) -> String {
+        guard isDataLoaded else {
+            return "Loading..."
+        }
+        
+        let improvement = thirtyDayImprovement
+        let isImproving = improvement != nil && improvement! > 0
+        let isDecline = improvement != nil && improvement! < -5
+        let isBigImprovement = improvement != nil && improvement! > 10
+        let isSignificantDecline = improvement != nil && improvement! < -15
+        
+        let historyAnalysis = insight.historyAnalysis
+        let recoveryPotential = historyAnalysis?.recoveryPotential ?? 0
+        let hasRecoveryPotential = recoveryPotential > 0.15
+        let hasHighRecoveryPotential = recoveryPotential > 0.30
+        let hasStrongFoundation = historyAnalysis?.experienceFloor ?? 0 > 0.25
+        
+        if habit.isBadHabit {
+            if percentage >= 95 {
+                return "Fully Controlled"
+            } else if percentage >= 80 {
+                if isSignificantDecline {
+                    return "Control Slipping"
+                } else if hasHighRecoveryPotential {
+                    return "Muscle Memory"
+                } else if isBigImprovement {
+                    return "Major Progress"
+                } else {
+                    return "Strong Control"
+                }
+            } else if percentage >= 60 {
+                if isSignificantDecline {
+                    return "Losing Ground"
+                } else if hasRecoveryPotential {
+                    return "Rebuilding"
+                } else if isBigImprovement {
+                    return "Making Progress"
+                } else if isImproving {
+                    return "Gaining Control"
+                } else if hasStrongFoundation {
+                    return "Solid Base"
+                } else {
+                    return "Inconsistent"
+                }
+            } else if percentage >= 40 {
+                if isDecline {
+                    return "Weakening"
+                } else if hasRecoveryPotential {
+                    return "Has Potential"
+                } else if isImproving {
+                    return "Building Up"
+                } else if hasStrongFoundation {
+                    return "Foundation Set"
+                } else {
+                    return "Developing"
+                }
+            } else if percentage >= 20 {
+                return hasStrongFoundation ? "Early Foundation" : (isDecline ? "Struggling" : "Starting Out")
+            } else {
+                return isDecline ? "Failing Control" : "Just Beginning"
+            }
+        } else {
+            if percentage >= 95 {
+                return "Fully Automated"
+            } else if percentage >= 80 {
+                if isSignificantDecline {
+                    return "Automation Fading"
+                } else if hasHighRecoveryPotential {
+                    return "Muscle Memory"
+                } else if isBigImprovement {
+                    return "Major Growth"
+                } else {
+                    return "Well Automated"
+                }
+            } else if percentage >= 60 {
+                if isSignificantDecline {
+                    return "Losing Momentum"
+                } else if hasRecoveryPotential {
+                    return "Rebuilding"
+                } else if isBigImprovement {
+                    return "Accelerating"
+                } else if isImproving {
+                    return "Getting Stronger"
+                } else if hasStrongFoundation {
+                    return "Solid Progress"
+                } else {
+                    return "Moderately Set"
+                }
+            } else if percentage >= 40 {
+                if isDecline {
+                    return "Weakening"
+                } else if hasRecoveryPotential {
+                    return "Has Potential"
+                } else if isImproving {
+                    return "Building Habit"
+                } else if hasStrongFoundation {
+                    return "Foundation Built"
+                } else {
+                    return "Taking Shape"
+                }
+            } else if percentage >= 20 {
+                return hasStrongFoundation ? "Early Foundation" : (isDecline ? "Struggling" : "Early Stage")
+            } else {
+                return isDecline ? "Habit Failing" : "Just Starting"
+            }
         }
     }
 }
 
-// MARK: - Predictive Insights Section
-struct PredictiveInsightsSection: View {
-    let predictions: HabitPredictions
-    let currentAutomation: Double
-    @State private var showDetails = false
+
+// MARK: - Automation Info Sheet
+struct AutomationInfoSheetView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Header
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "brain.filled.head.profile")
+                                .font(.title2)
+                                .foregroundStyle(.blue)
+                            
+                            Text("How Automation Works")
+                                .font(.customFont("Lexend", .bold, 24))
+                                .foregroundStyle(.primary)
+                            
+                            Spacer()
+                        }
+                        
+                        Text("Understanding your habit automation percentage")
+                            .font(.customFont("Lexend", .regular, 16))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    
+                    // Info sections
+                    VStack(spacing: 20) {
+                        infoSection(
+                            emoji: "🧠",
+                            title: "How Automation is calculated",
+                            description: "Your Automation % shows how automatic (or in control) a habit feels — from 0% to 100%.\nIt's based on your schedule, streaks, completions, and habit intensity."
+                        )
+                        
+                        infoSection(
+                            emoji: "📅",
+                            title: "Custom day start",
+                            description: "You can choose when your day begins (default 4:00).\nHabital uses this to decide which day completions belong to — so late-night actions count correctly."
+                        )
+                        
+                        infoSection(
+                            emoji: "✅",
+                            title: "Good habits",
+                            description: "Completing on a scheduled day increases automation toward 100%.\nMissing a scheduled day reduces it, but progress never fully resets.\nOn non-scheduled days, automation drifts only slightly."
+                        )
+                        
+                        infoSection(
+                            emoji: "🚫",
+                            title: "Bad habits",
+                            description: "If it's something you're trying to avoid, automation means self-control:\nEach day you resist strengthens control.\nEach lapse reduces it, but some control always remains."
+                        )
+                        
+                        infoSection(
+                            emoji: "⚙️",
+                            title: "Intensity",
+                            description: "Higher-intensity habits (harder goals) grow slower and decay faster, reflecting their challenge."
+                        )
+                        
+                        infoSection(
+                            emoji: "📈",
+                            title: "Baseline (Floor)",
+                            description: "Every habit keeps a minimum baseline — your brain's memory of past effort.\nThe more total days you've practiced, the higher this floor gets, making recovery faster after breaks."
+                        )
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 30)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .font(.customFont("Lexend", .medium, 16))
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func infoSection(emoji: String, title: String, description: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("Predictions", systemImage: "chart.line.uptrend.xyaxis")
-                    .font(.customFont("Lexend", .medium, 18))
+            HStack(spacing: 12) {
+                Text(emoji)
+                    .font(.title2)
+                
+                Text(title)
+                    .font(.customFont("Lexend", .semibold, 18))
+                    .foregroundStyle(.primary)
                 
                 Spacer()
-                
-                // Trend indicator
-                Label(trendText, systemImage: predictions.trend.icon)
-                    .font(.customFont("Lexend", .medium, 12))
-                    .foregroundStyle(trendColor)
             }
             
-            // Guidance message
-            Text(predictions.guidanceMessage)
-                .font(.customFont("Lexend", .regular, 14))
+            Text(description)
+                .font(.customFont("Lexend", .regular, 15))
                 .foregroundStyle(.primary)
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .background(trendColor.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            
-            // Future projections
-            VStack(spacing: 4) {
-                ProjectionRow(
-                    timeframe: "1 Week",
-                    current: currentAutomation,
-                    projected: predictions.oneWeekAutomation
-                )
-                
-                ProjectionRow(
-                    timeframe: "2 Weeks",
-                    current: currentAutomation,
-                    projected: predictions.twoWeekAutomation
-                )
-                
-                ProjectionRow(
-                    timeframe: "1 Month",
-                    current: currentAutomation,
-                    projected: predictions.oneMonthAutomation
-                )
-            }
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding()
+        .padding(16)
         .glassBackground()
-    }
-    
-    private var trendText: String {
-        switch predictions.trend {
-        case .improving: return "Improving"
-        case .stable: return "Stable"
-        case .declining: return "Needs Attention"
-        }
-    }
-    
-    private var trendColor: Color {
-        switch predictions.trend {
-        case .improving: return .green
-        case .stable: return .blue
-        case .declining: return .orange
-        }
-    }
-}
-
-// MARK: - Projection Row
-struct ProjectionRow: View {
-    let timeframe: String
-    let current: Double
-    let projected: Double
-    
-    private var improvement: Double {
-        projected - current
-    }
-    
-    private var improvementColor: Color {
-        if improvement > 5 {
-            return .green
-        } else if improvement > 0 {
-            return .blue
-        } else {
-            return .orange
-        }
-    }
-    
-    var body: some View {
-        HStack {
-            Text(timeframe)
-                .font(.customFont("Lexend", .regular, 12))
-                .foregroundStyle(.secondary)
-            
-            Spacer()
-            
-            HStack(spacing: 4) {
-                Text(String(format: "%.0f%%", projected))
-                    .font(.customFont("Lexend", .medium, 12))
-                
-                if improvement != 0 {
-                    Text(String(format: "%+.0f", improvement))
-                        .font(.customFont("Lexend", .medium, 10))
-                        .foregroundStyle(improvementColor)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 2)
-                        .background(improvementColor.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                }
-            }
-        }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 8)
-        .background(Color.secondary.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-    }
-}
-
-// MARK: - Metrics Section
-struct MetricsSection: View {
-    let insight: HabitAutomationInsight
-    let habit: Habit
-    
-    init(insight: HabitAutomationInsight, habit: Habit? = nil) {
-        self.insight = insight
-        // Get habit from insight if not provided
-        if let habit = habit {
-            self.habit = habit
-        } else {
-            // Fallback - create a temporary habit object
-            let context = PersistenceController.shared.container.viewContext
-            let tempHabit = Habit(context: context)
-            tempHabit.isBadHabit = false
-            self.habit = tempHabit
-        }
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Performance Metrics", systemImage: "chart.bar.fill")
-                .font(.customFont("Lexend", .semiBold, 18))
-            
-            HStack(spacing: 12) {
-                MetricCard(
-                    title: habit.isBadHabit ? "Avoidance Rate" : "Completion Rate",
-                    value: "\(Int(insight.rawCompletionRate * 100))%",
-                    subtitle: habit.isBadHabit ?
-                        "\(insight.actualCompletions) days avoided" :
-                        "\(insight.actualCompletions)/\(insight.expectedCompletions) days",
-                    icon: "checkmark.circle.fill",
-                    color: completionRateColor(insight.rawCompletionRate)
-                )
-                
-                MetricCard(
-                    title: habit.isBadHabit ? "Days Free" : "Current Streak",
-                    value: "\(insight.currentStreak)",
-                    subtitle: insight.currentStreak == 1 ? "day" : "days",
-                    icon: "flame.fill",
-                    color: .orange
-                )
-            }
-        }
-        .padding()
-        .glassBackground()
-    }
-    
-    private func completionRateColor(_ rate: Double) -> Color {
-        if rate >= 0.8 {
-            return .green
-        } else if rate >= 0.6 {
-            return .blue
-        } else if rate >= 0.4 {
-            return .orange
-        } else {
-            return .red
-        }
-    }
-}
-
-// MARK: - Component Breakdown Section (for debugging/advanced users)
-struct ComponentBreakdownSection: View {
-    let insight: HabitAutomationInsight
-    @State private var showDetails = false
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Button(action: { withAnimation { showDetails.toggle() } }) {
-                HStack {
-                    Label("Formula Components", systemImage: "function")
-                        .font(.customFont("Lexend", .semiBold, 18))
-                    Spacer()
-                    Image(systemName: showDetails ? "chevron.up" : "chevron.down")
-                        .font(.customFont("Lexend", .regular, 12))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .buttonStyle(.plain)
-            
-            if showDetails {
-                VStack(alignment: .leading, spacing: 8) {
-                    ComponentRow(
-                        label: "Base Completion Rate",
-                        value: String(format: "%.1f%%", insight.rawCompletionRate * 100),
-                        description: "Actual completions / Expected completions"
-                    )
-                    
-                    ComponentRow(
-                        label: "Streak Multiplier",
-                        value: String(format: "×%.2f", insight.streakMultiplier),
-                        description: "Bonus from consecutive completions"
-                    )
-                    
-                    ComponentRow(
-                        label: "Intensity Weight",
-                        value: String(format: "×%.2f", insight.intensityWeight),
-                        description: "Adjustment for habit difficulty"
-                    )
-                    
-                    ComponentRow(
-                        label: "Time Factor",
-                        value: String(format: "×%.2f", insight.timeFactor),
-                        description: "Growth factor over time"
-                    )
-                    
-                    Divider()
-                    
-                    ComponentRow(
-                        label: "Final Automation",
-                        value: String(format: "%.1f%%", insight.automationPercentage),
-                        description: "Combined result (capped at 100%)"
-                    )
-                    .fontWeight(.bold)
-                }
-                .padding(.vertical, 8)
-            }
-        }
-        .padding()
-        .glassBackground()
-    }
-}
-
-// MARK: - Component Row
-struct ComponentRow: View {
-    let label: String
-    let value: String
-    let description: String
-    
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.customFont("Lexend", .medium, 12))
-                Text(description)
-                    .font(.customFont("Lexend", .regular, 10))
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Text(value)
-                .font(.customFont("Lexend", .medium, 12))
-                .foregroundStyle(.blue)
-        }
-    }
-}
-
-// MARK: - Metric Card
-struct MetricCard: View {
-    let title: String
-    let value: String
-    let subtitle: String
-    let icon: String
-    let color: Color
-    
-    var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(color)
-            
-            Text(value)
-                .font(.customFont("Lexend", .bold, 20))
-            
-            Text(subtitle)
-                .font(.customFont("Lexend", .regular, 10))
-                .foregroundStyle(.secondary)
-            
-            Text(title)
-                .font(.customFont("Lexend", .regular, 12))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding()
-        .background(color.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 

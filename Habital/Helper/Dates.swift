@@ -108,12 +108,6 @@ func formatDate(_ date: Date?) -> String {
 }
 
 
-func formatDayOfWeek(_ date: Date?) -> String {
-    guard let date = date else { return "" }
-    let formatter = DateFormatter()
-    formatter.dateFormat = "EEEE"  // Full day name
-    return formatter.string(from: date)
-}
 
 func formattedDate(for date: Date) -> String {
     let formatter = DateFormatter()

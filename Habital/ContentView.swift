@@ -61,8 +61,11 @@ struct ContentView: View {
                         }
                     }
                 }
-                .tabViewStyle(.tabBarOnly)
-                .tint(colorScheme == .dark ? .white : .black)
+                .tabViewStyle(.sidebarAdaptable)
+                .tint(colorScheme == .dark ? Color(hex: "C9D4FF") : Color(hex: "4050B5"))
+
+
+
             } else {
                 // iOS 17 and below uses traditional TabView
                 TabView(selection: $selectedTab) {
@@ -94,7 +97,7 @@ struct ContentView: View {
                         }
                         .tag(TabBarItem.settings)
                 }
-                .tint(.black)
+                .tint(colorScheme == .dark ? Color(hex: "C9D4FF") : Color(hex: "4050B5"))
             }
         }
         .environmentObject(sharedLevelData)

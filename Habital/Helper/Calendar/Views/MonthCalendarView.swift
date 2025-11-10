@@ -4,6 +4,10 @@ struct MonthCalendarView: View {
     @Binding var isDragging: Bool
     let dragProgress: CGFloat
     @EnvironmentObject var habitManager: HabitPreloadManager
+    
+    // 🔄 Add toggleManager to observe completion changes
+    @ObservedObject var toggleManager: HabitToggleManager
+    
     // Add parameters for habit data
     let getFilteredHabits: (Date) -> [Habit]
     let animateRings: Bool
@@ -30,6 +34,7 @@ struct MonthCalendarView: View {
         focused: Binding<Week>,
         isDragging: Binding<Bool>,
         dragProgress: CGFloat,
+        toggleManager: HabitToggleManager,
         getFilteredHabits: @escaping (Date) -> [Habit] = { _ in [] },
         animateRings: Bool = false,
         isShownInHabitDetails: Bool? = nil,
@@ -41,6 +46,7 @@ struct MonthCalendarView: View {
         _selection = selection
         _isDragging = isDragging
         self.dragProgress = dragProgress
+        self.toggleManager = toggleManager
         self.getFilteredHabits = getFilteredHabits
         self.animateRings = animateRings
         self.isShownInHabitDetails = isShownInHabitDetails
@@ -75,23 +81,7 @@ struct MonthCalendarView: View {
         ScrollView(.horizontal) {
             LazyHStack(spacing: .zero) {
                 ForEach(months) { month in
-                    VStack {
-                        MonthView(
-                            month: month,
-                            dragProgress: dragProgress,
-                            isDragging: $isDragging,
-                            getFilteredHabits: getFilteredHabits,
-                            animateRings: animateRings,
-                            refreshTrigger: refreshTrigger,
-                            focused: $focused,
-                            selectedDate: $selection,
-                            isShownInHabitDetails: isShownInHabitDetails,
-                            habitColor: habitColor
-                        )
-                        .offset(y: (1 - dragProgress) * verticalOffset(for: month))
-                        .frame(width: calendarWidth, height: Constants.monthHeight)
-                        .onAppear { loadMonth(from: month) }
-                    }
+                    monthViewContainer(for: month)
                 }
             }
             .scrollTargetLayout()
@@ -130,12 +120,24 @@ struct MonthCalendarView: View {
             // Update the current month ID
             currentMonthId = focusedMonth.id
             
-            // FIXED: Always use a date from the focused month for the title, not the selected date
-            let titleDate = focusedMonth.weeks.flatMap(\.days).first { date in
-                let calendar = Calendar.current
-                let day = calendar.component(.day, from: date)
-                return day >= 10 && day <= 20  // Use a middle day of the month
-            } ?? focusedWeek.days.first!
+            // FIXED: Prioritize today's month when the current week spans two months
+            let today = Date()
+            let calendar = Calendar.current
+            let todayComponents = calendar.dateComponents([.year, .month], from: today)
+            
+            let titleDate: Date
+            
+            // Check if today's date is in the focused week
+            if focusedWeek.days.contains(where: { calendar.isDate($0, inSameDayAs: today) }) {
+                // Today is in the focused week, use today's month for the title
+                titleDate = today
+            } else {
+                // Today is not in the focused week, use a date from the focused month
+                titleDate = focusedMonth.weeks.flatMap(\.days).first { date in
+                    let day = calendar.component(.day, from: date)
+                    return day >= 10 && day <= 20  // Use a middle day of the month
+                } ?? focusedWeek.days.first!
+            }
             
             title = Calendar.monthAndYear(from: titleDate)
             
@@ -281,6 +283,29 @@ struct MonthCalendarView: View {
 }
 
 extension MonthCalendarView {
+    // Helper method to break up complex expression for type checker
+    @ViewBuilder
+    private func monthViewContainer(for month: Month) -> some View {
+        VStack {
+            MonthView(
+                month: month,
+                dragProgress: dragProgress,
+                isDragging: $isDragging,
+                getFilteredHabits: getFilteredHabits,
+                animateRings: animateRings,
+                refreshTrigger: refreshTrigger,
+                focused: $focused,
+                selectedDate: $selection,
+                toggleManager: toggleManager,
+                isShownInHabitDetails: isShownInHabitDetails,
+                habitColor: habitColor
+            )
+            .offset(y: (1 - dragProgress) * verticalOffset(for: month))
+            .frame(width: calendarWidth, height: Constants.monthHeight)
+            .onAppear { loadMonth(from: month) }
+        }
+    }
+    
     func loadMonth(from month: Month) {
         if month.order == .previous, months.first == month, let previousMonth = month.previousMonth {
             // Check if previous month has ANY valid days

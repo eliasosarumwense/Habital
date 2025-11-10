@@ -13,6 +13,9 @@ class HabitToggleManager: ObservableObject {
     let viewContext: NSManagedObjectContext
     let calendar = Calendar.current
     
+    // 🔄 Published property that triggers view updates when habits are toggled
+    @Published var completionVersion = UUID()
+    
     init(context: NSManagedObjectContext) {
         self.viewContext = context
     }
@@ -39,7 +42,7 @@ class HabitToggleManager: ObservableObject {
                 if repeatsPerDay > 1 {
                     toggleMultiRepeatCompletion(for: habit, on: date, repeatsPerDay: repeatsPerDay)
                 } else {
-                    toggleSingleCompletion(for: habit, on: date)
+                    toggleSingleCompletion(for: habit, on: date, tracksTime: tracksTime)
                 }
                 
             case .duration:
@@ -52,7 +55,7 @@ class HabitToggleManager: ObservableObject {
                     let targetDuration = getTargetDuration(for: habit)
                     minutesToUse = (currentDuration >= targetDuration) ? 0 : targetDuration
                 }
-                toggleDurationCompletion(for: habit, on: date, minutes: minutesToUse)
+                toggleDurationCompletion(for: habit, on: date, minutes: minutesToUse, tracksTime: tracksTime)
                 
             case .quantity:
                 // Use provided quantity or toggle to target/0
@@ -64,11 +67,14 @@ class HabitToggleManager: ObservableObject {
                     let targetQuantity = getTargetQuantity(for: habit)
                     quantityToUse = (currentQuantity >= targetQuantity) ? 0 : targetQuantity
                 }
-                toggleQuantityCompletion(for: habit, on: date, quantity: quantityToUse)
+                toggleQuantityCompletion(for: habit, on: date, quantity: quantityToUse, tracksTime: tracksTime)
             }
         
         // Get the completion state after toggle using normalized date
         let isCompletedAfter = isHabitCompletedForDate(habit, on: normalizedDateForCalc)
+        
+        // 🔄 Trigger view updates by changing the published property
+        completionVersion = UUID()
         
         // Smart cache invalidation using normalized date
         invalidateCacheForIntervalHabit(habit: habit, completionDate: normalizedDateForCalc)
@@ -102,6 +108,7 @@ class HabitToggleManager: ObservableObject {
                 )
             }
         }
+        //HabitUtilities.clearHabitActivityCache()
     }
     
     private func saveContext() {
@@ -113,8 +120,8 @@ class HabitToggleManager: ObservableObject {
             }
         }
     
-    func toggleDurationCompletion(for habit: Habit, on date: Date, minutes: Int) {
-        let normalizedDate = date
+    func toggleDurationCompletion(for habit: Habit, on date: Date, minutes: Int, tracksTime: Bool = false) {
+        let normalizedDate = tracksTime ? date : calendar.startOfDay(for: date)
             let dayKey = DayKeyFormatter.localKey(from: date)
             
             // Track if we're removing a skip
@@ -141,11 +148,13 @@ class HabitToggleManager: ObservableObject {
                 
                 do {
                     try viewContext.save()
+                    //HabitUtilities.clearHabitActivityCache()
                     print("✅ Duration completion deleted for habit '\(habit.name ?? "Unknown")' - Total completions: \(habit.totalCompletions)")
                 } catch {
                     print("❌ Failed to delete duration completion: \(error)")
                     viewContext.rollback()
                 }
+                
                 return
             }
         
@@ -169,7 +178,7 @@ class HabitToggleManager: ObservableObject {
         
         // Update duration values
         completion.duration = Int16(minutes)
-        completion.tracksTime = true
+        completion.tracksTime = tracksTime
         completion.loggedAt = Date()
         
         // Get target duration
@@ -198,6 +207,7 @@ class HabitToggleManager: ObservableObject {
         // Save changes
         do {
             try viewContext.save()
+            //HabitUtilities.clearHabitActivityCache()
             print("✅ Duration updated: \(previousMinutes)min → \(minutes)min (target: \(targetDuration)min) - Total completions: \(habit.totalCompletions)")
         } catch {
             print("❌ Failed to update duration: \(error)")
@@ -206,8 +216,8 @@ class HabitToggleManager: ObservableObject {
         
     }
 
-    func toggleQuantityCompletion(for habit: Habit, on date: Date, quantity: Int) {
-        let normalizedDate = date
+    func toggleQuantityCompletion(for habit: Habit, on date: Date, quantity: Int, tracksTime: Bool = false) {
+        let normalizedDate = tracksTime ? date : calendar.startOfDay(for: date)
             let dayKey = DayKeyFormatter.localKey(from: date)
             
             // Track if we're removing a skip
@@ -234,6 +244,7 @@ class HabitToggleManager: ObservableObject {
                 
                 do {
                     try viewContext.save()
+                    //HabitUtilities.clearHabitActivityCache()
                     print("✅ Quantity completion deleted for habit '\(habit.name ?? "Unknown")' - Total completions: \(habit.totalCompletions)")
                 } catch {
                     print("❌ Failed to delete quantity completion: \(error)")
@@ -262,6 +273,7 @@ class HabitToggleManager: ObservableObject {
         
         // Update quantity values
         completion.quantity = Int32(quantity)
+        completion.tracksTime = tracksTime
         completion.loggedAt = Date()
         
         // Get target quantity
@@ -290,11 +302,13 @@ class HabitToggleManager: ObservableObject {
         // Save changes
         do {
             try viewContext.save()
+            //HabitUtilities.clearHabitActivityCache()
             print("✅ Quantity updated: \(previousQuantity) → \(quantity) (target: \(targetQuantity)) - Total completions: \(habit.totalCompletions)")
         } catch {
             print("❌ Failed to update quantity: \(error)")
             viewContext.rollback()
         }
+        
     }
     
     private func getCompletedCompletionsCount(for habit: Habit, on date: Date) -> Int {
@@ -484,6 +498,7 @@ class HabitToggleManager: ObservableObject {
         
         do {
             try viewContext.save()
+            HabitUtilities.clearHabitActivityCache()
             print("✅ Updated habit '\(habit.name ?? "Unknown")' - Total completions: \(habit.totalCompletions)")
         } catch {
             print("❌ Error updating habit: \(error)")
@@ -548,6 +563,7 @@ class HabitToggleManager: ObservableObject {
         
         do {
             try viewContext.save()
+            HabitUtilities.clearHabitActivityCache()
             print("✅ Updated multi-repeat habit '\(habit.name ?? "Unknown")' - Total completions: \(habit.totalCompletions)")
         } catch {
             print("❌ Error updating multi-repeat completion: \(error)")
@@ -625,7 +641,11 @@ class HabitToggleManager: ObservableObject {
         // Save changes
         do {
             try viewContext.save()
+            HabitUtilities.clearHabitActivityCache()
             print("✅ Habit '\(habit.name ?? "Unknown")' skipped for \(dayKey) - Total completions: \(habit.totalCompletions)")
+            
+            // 🔄 Trigger view updates
+            completionVersion = UUID()
         } catch {
             print("❌ Failed to skip habit: \(error)")
             viewContext.rollback()
@@ -647,7 +667,11 @@ class HabitToggleManager: ObservableObject {
             // Save changes
             do {
                 try viewContext.save()
+                HabitUtilities.clearHabitActivityCache()
                 print("✅ Habit '\(habit.name ?? "Unknown")' unskipped for \(dayKey)")
+                
+                // 🔄 Trigger view updates
+                completionVersion = UUID()
             } catch {
                 print("❌ Failed to unskip habit: \(error)")
                 viewContext.rollback()
@@ -759,7 +783,11 @@ class HabitToggleManager: ObservableObject {
             }
             
             try viewContext.save()
+            HabitUtilities.clearHabitActivityCache()
             print("✅ Deleted \(deletedCount) completions for '\(habit.name ?? "Unknown")' - Total completions: \(habit.totalCompletions)")
+            
+            // 🔄 Trigger view updates
+            completionVersion = UUID()
         } catch {
             print("Failed to delete completions: \(error)")
         }
@@ -810,22 +838,7 @@ class HabitToggleManager: ObservableObject {
     }
     /// Check if habit is completed for a specific date
     func isHabitCompletedForDate(_ habit: Habit, on date: Date) -> Bool {
-        let normalizedDate = calendar.startOfDay(for: date)
-        
-        // Use cached repeatsPerDay if available
-        let repeatsPerDay = HabitUtilities.getRepeatsPerDay(for: habit, on: normalizedDate)
-        
-        if repeatsPerDay <= 1 {
-            // Fast path for single-repeat habits
-            guard let completion = findCompletion(for: habit, on: normalizedDate) else {
-                return false
-            }
-            return completion.completed
-        } else {
-            // For multi-repeat habits, use optimized count
-            let completedCount = HabitUtilities.getCompletedRepeatsCount(for: habit, on: normalizedDate)
-            return completedCount >= repeatsPerDay
-        }
+        return habit.isCompleted(on: date)
     }
     
     /// Get completed repeats count for multi-repeat habits
@@ -873,9 +886,6 @@ class HabitToggleManager: ObservableObject {
         
         // Clear general activity cache (lightweight)
         HabitUtilities.clearHabitActivityCache()
-        
-        // Clear repeats cache (lightweight)
-        HabitUtilities.clearRepeatsPerDayCache()
     }
     
     // MARK: - Rest of existing methods
@@ -908,7 +918,11 @@ class HabitToggleManager: ObservableObject {
             // Save changes
             do {
                 try viewContext.save()
+                HabitUtilities.clearHabitActivityCache()
                 print("✅ Force completed habit '\(habit.name ?? "Unknown")' - Total completions: \(habit.totalCompletions)")
+                
+                // 🔄 Trigger view updates
+                completionVersion = UUID()
             } catch {
                 print("Error forcing habit completion: \(error)")
                 viewContext.rollback()
@@ -943,7 +957,12 @@ class HabitToggleManager: ObservableObject {
                     // Save
                     do {
                         try viewContext.save()
+                        HabitUtilities.clearHabitActivityCache()
                         print("✅ Added completion with dayKey: \(dayKey)")
+                        
+                        // 🔄 Trigger view updates
+                        completionVersion = UUID()
+                        
                         return currentCompletions + 1
                     } catch {
                         print("Error adding completion: \(error)")
@@ -954,6 +973,55 @@ class HabitToggleManager: ObservableObject {
                 
                 return currentCompletions
         }
+    
+    // MARK: - Remove a single completion
+    func removeSingleCompletion(for habit: Habit, on date: Date) -> Int {
+        let normalizedDate = calendar.startOfDay(for: date)
+        let dayKey = DayKeyFormatter.localKey(from: date)
+        let currentCompletions = HabitUtilities.getCompletedRepeatsCount(for: habit, on: normalizedDate)
+        
+        if currentCompletions > 0 {
+            // Find and remove the most recent completion for this date
+            let request = NSFetchRequest<Completion>(entityName: "Completion")
+            request.predicate = NSPredicate(
+                format: "dayKey == %@ AND habit == %@ AND completed == YES",
+                dayKey, habit
+            )
+            request.sortDescriptors = [NSSortDescriptor(keyPath: \Completion.loggedAt, ascending: false)]
+            request.fetchLimit = 1
+            
+            do {
+                let completions = try viewContext.fetch(request)
+                if let completionToRemove = completions.first {
+                    viewContext.delete(completionToRemove)
+                    
+                    // Decrement total completions
+                    habit.totalCompletions = max(0, habit.totalCompletions - 1)
+                    
+                    // Update lastCompletionDate if needed
+                    if currentCompletions == 1 {
+                        // This was the last completion for the day, find previous completion date
+                        habit.lastCompletionDate = habit.findMostRecentCompletion(before: date)?.date
+                    }
+                    
+                    // Save
+                    try viewContext.save()
+                    HabitUtilities.clearHabitActivityCache()
+                    print("✅ Removed completion with dayKey: \(dayKey)")
+                    
+                    // 🔄 Trigger view updates
+                    completionVersion = UUID()
+                    
+                    return currentCompletions - 1
+                }
+            } catch {
+                print("Error removing completion: \(error)")
+                viewContext.rollback()
+            }
+        }
+        
+        return currentCompletions
+    }
     
     /// Check if habit has reached its completion target for the day
     func hasReachedCompletionTarget(for habit: Habit, on date: Date) -> Bool {
@@ -983,7 +1051,7 @@ class HabitToggleManager: ObservableObject {
 }
 
 extension HabitUtilities {
-    
+    /*
     static func getCompletedRepeatsCount(for habit: Habit, on date: Date) -> Int {
             guard let completions = habit.completion as? Set<Completion> else { return 0 }
             
@@ -1027,4 +1095,5 @@ extension HabitUtilities {
     static func clearRepeatsPerDayCache() {
         repeatsPerDayCache.removeAll()
     }
+     */
 }

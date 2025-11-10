@@ -1190,6 +1190,9 @@ struct EditHabitView: View {
         
         do {
             try viewContext.save()
+            
+            // Notify that the habit was updated so caches can be invalidated
+            NotificationCenter.default.post(name: NSNotification.Name("HabitUpdated"), object: nil)
         } catch {
             print("Error saving habit: \(error)")
         }

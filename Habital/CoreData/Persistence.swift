@@ -24,6 +24,7 @@ struct PersistenceController {
             habit.habitDescription = "15 minutes of mindfulness practice"
             habit.icon = "brain.head.profile"
             habit.isBadHabit = false
+            habit.isArchived = false  // Explicitly set to false for preview data
             
             // Set the color (orange)
             let colorData = try? NSKeyedArchiver.archivedData(withRootObject: UIColor.systemOrange, requiringSecureCoding: false)

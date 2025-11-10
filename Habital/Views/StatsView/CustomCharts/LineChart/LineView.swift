@@ -111,7 +111,7 @@ public struct LineView: View {
                                    hideHorizontalLines: self.$hideHorizontalLines,
                                    specifier: legendSpecifier)
                                 .transition(.opacity)
-                                .animation(Animation.easeOut(duration: 1).delay(1))
+                                .animation(Animation.easeOut(duration: 1).delay(1), value: self.showLegend)
                                 .opacity(self.opacity > 0 ? 0.3 : 0.6)
                                 .animation(.easeInOut(duration: 0.3), value: self.opacity)
                                 .offset(x: -10)

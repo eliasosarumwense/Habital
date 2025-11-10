@@ -11,12 +11,17 @@ import CoreData
 
 struct WeekTimelineView: View {
     @EnvironmentObject var habitManager: HabitPreloadManager
+    @ObservedObject var toggleManager: HabitToggleManager  // 🔄 Observe toggleManager directly
     @Binding var selectedDate: Date
     @Binding var weekOffset: Int
+    @Binding var filteredHabits: [Habit]  // Add binding for filtered habits
     var onDateSelected: (Date) -> Void
     
     // Add filtered habits for each date
     var getFilteredHabits: (Date) -> [Habit]
+    
+    // Add habits version parameter to track when habits change
+    var habitsVersion: UUID
     
     // State for the scrollable calendar integration
     @State private var selection: Date?
@@ -45,6 +50,7 @@ struct WeekTimelineView: View {
     
     @StateObject private var cacheManager = CalendarCacheManager()
     
+
     let calendar = Calendar.current
     
     private var accentColor: Color {
@@ -56,27 +62,69 @@ struct WeekTimelineView: View {
     }
     
     // Initialize with filtered habits function
-    init(selectedDate: Binding<Date>, weekOffset: Binding<Int>, getFilteredHabits: @escaping (Date) -> [Habit]) {
+    init(toggleManager: HabitToggleManager, selectedDate: Binding<Date>, weekOffset: Binding<Int>, filteredHabits: Binding<[Habit]>, onDateSelected: @escaping (Date) -> Void = { _ in }, getFilteredHabits: @escaping (Date) -> [Habit], habitsVersion: UUID = UUID()) {
+        self.toggleManager = toggleManager
         self._selectedDate = selectedDate
         self._weekOffset = weekOffset
-        self.onDateSelected = { _ in }
+        self._filteredHabits = filteredHabits
+        self.onDateSelected = onDateSelected
         self.getFilteredHabits = getFilteredHabits
+        self.habitsVersion = habitsVersion
+        
+        // FIXED: Initialize state variables properly
+        let initialDate = selectedDate.wrappedValue
+        let nearestMonday = Calendar.nearestMonday(from: initialDate)
+        let weekDays = Calendar.currentWeek(from: nearestMonday)
+        let initialWeek = Week(days: weekDays, order: .current)
+        
+        // Set initial values for State variables
+        _selection = State(initialValue: initialDate)
+        _title = State(initialValue: Calendar.monthAndYear(from: initialDate))
+        _focusedWeek = State(initialValue: initialWeek)
     }
     
     // Backward compatibility initializer
-    init(selectedDate: Binding<Date>, weekOffset: Binding<Int>) {
+    init(toggleManager: HabitToggleManager, selectedDate: Binding<Date>, weekOffset: Binding<Int>) {
+        self.toggleManager = toggleManager
         self._selectedDate = selectedDate
         self._weekOffset = weekOffset
+        self._filteredHabits = .constant([])  // Initialize with empty array
         self.onDateSelected = { _ in }
         self.getFilteredHabits = { _ in return [] }
+        self.habitsVersion = UUID()
+        
+        // FIXED: Initialize state variables properly
+        let initialDate = selectedDate.wrappedValue
+        let nearestMonday = Calendar.nearestMonday(from: initialDate)
+        let weekDays = Calendar.currentWeek(from: nearestMonday)
+        let initialWeek = Week(days: weekDays, order: .current)
+        
+        // Set initial values for State variables
+        _selection = State(initialValue: initialDate)
+        _title = State(initialValue: Calendar.monthAndYear(from: initialDate))
+        _focusedWeek = State(initialValue: initialWeek)
     }
     
     // Full initializer with callback
-    init(selectedDate: Binding<Date>, weekOffset: Binding<Int>, onDateSelected: @escaping (Date) -> Void, getFilteredHabits: @escaping (Date) -> [Habit]) {
+    init(toggleManager: HabitToggleManager, selectedDate: Binding<Date>, weekOffset: Binding<Int>, onDateSelected: @escaping (Date) -> Void, getFilteredHabits: @escaping (Date) -> [Habit], habitsVersion: UUID = UUID()) {
+        self.toggleManager = toggleManager
         self._selectedDate = selectedDate
         self._weekOffset = weekOffset
+        self._filteredHabits = .constant([])  // Initialize with empty array
         self.onDateSelected = onDateSelected
         self.getFilteredHabits = getFilteredHabits
+        self.habitsVersion = habitsVersion
+        
+        // FIXED: Initialize state variables properly
+        let initialDate = selectedDate.wrappedValue
+        let nearestMonday = Calendar.nearestMonday(from: initialDate)
+        let weekDays = Calendar.currentWeek(from: nearestMonday)
+        let initialWeek = Week(days: weekDays, order: .current)
+        
+        // Set initial values for State variables
+        _selection = State(initialValue: initialDate)
+        _title = State(initialValue: Calendar.monthAndYear(from: initialDate))
+        _focusedWeek = State(initialValue: initialWeek)
     }
     
     var body: some View {
@@ -91,6 +139,7 @@ struct WeekTimelineView: View {
                                             selection: $selection,
                                             focused: $focusedWeek,
                                             isDragging: $isDragging,
+                                            toggleManager: toggleManager,
                                             getFilteredHabits: getFilteredHabits,
                                             animateRings: animateRings
                                         )
@@ -103,6 +152,7 @@ struct WeekTimelineView: View {
                         focused: $focusedWeek,
                         isDragging: $isDragging,
                         dragProgress: dragProgress,
+                        toggleManager: toggleManager,
                         getFilteredHabits: getFilteredHabits,
                         animateRings: animateRings
                     )
@@ -191,22 +241,39 @@ struct WeekTimelineView: View {
                         dragProgress = newValue / (Constants.monthHeight - Constants.dayHeight)
                     }
             .onAppear {
+                // FIXED: Ensure proper initialization
                 
-                // Set initial selection
-                selection = selectedDate
+                // 1. Set initial selection if not already set
+                if selection == nil {
+                    selection = selectedDate
+                }
                 
-                // Debug habits for the current week
+                // 2. Ensure focusedWeek is properly set based on selectedDate
+                let nearestMonday = Calendar.nearestMonday(from: selectedDate)
+                let currentWeekDays = Calendar.currentWeek(from: nearestMonday)
+                focusedWeek = Week(days: currentWeekDays, order: .current)
+                
+                // 3. Update title based on selected date
+                title = Calendar.monthAndYear(from: selectedDate)
+                
+                // 4. Handle habit manager constraints if loaded
+                if habitManager.isLoaded && habitManager.isDateBeforeEarliest(selectedDate) {
+                    selectedDate = habitManager.earliestStartDate
+                    focusedWeek = habitManager.getEarliestValidWeek()
+                    selection = selectedDate
+                    title = Calendar.monthAndYear(from: selectedDate)
+                }
+                
+                // 5. Debug habits for the current week
                 let weekDates = (0..<7).map { getDayDate(for: $0, weekOffset: 0) }
                 for date in weekDates {
                     debugHabitsForDay(date: date)
                 }
                 
-                // Trigger initial animation for rings
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        animateRings = true
-                    }
-                
+                // 6. Trigger initial animation for rings with a slight delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    animateRings = true
+                }
             }
             
             if showMonthView {
@@ -334,6 +401,7 @@ struct WeekTimelineView: View {
                         weekOffset: weekOffset
                     )
                 }
+        
                 .onChange(of: selectedDate) { _, newValue in
                     // Update visible dates when the month changes
                     let calendar = Calendar.current
@@ -345,6 +413,18 @@ struct WeekTimelineView: View {
                         )
                     }
                 }
+         
+        /*
+         
+                
+                .onChange(of: habitsVersion) { _, _ in
+                    cacheManager.updateVisibleDates(
+                        calendarType: calendarType,
+                        selectedDate: selectedDate,
+                        weekOffset: weekOffset
+                    )
+                }
+         */
                 .onAppear {
                     if habitManager.isDateBeforeEarliest(selectedDate) {
                                     selectedDate = habitManager.earliestStartDate
@@ -359,6 +439,11 @@ struct WeekTimelineView: View {
                     
                     
                 }
+        
+                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HabitCompleted"))) { _ in
+                    onDateSelected(selectedDate)
+                }
+                
     }
     
     // Add this method to update visible dates based on current view
@@ -779,11 +864,4 @@ struct ModernDayHeaders: View {
         let days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         return days[index]
     }
-}
-
-#Preview {
-    WeekTimelineView(
-        selectedDate: .constant(Date()),
-        weekOffset: .constant(0)
-    )
 }

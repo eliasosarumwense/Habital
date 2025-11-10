@@ -58,22 +58,22 @@ struct StatsView: View {
         
         if let selectedList = getSelectedHabitList(),
            let listColor = getListColor(from: selectedList) {
-            // Use list color when available - fades from top and bottom
+            // Use list color when available — very subtle in dark mode
             baseColors = [
-                colorScheme == .dark ? listColor.opacity(0.18) : listColor.opacity(0.25), // Top opacity
-                colorScheme == .dark ? listColor.opacity(0.10) : listColor.opacity(0.15), // Upper middle
-                colorScheme == .dark ? listColor.opacity(0.08) : listColor.opacity(0.12), // Lower middle
-                colorScheme == .dark ? listColor.opacity(0.05) : listColor.opacity(0.06), // Start bottom fade
-                colorScheme == .dark ? Color(hex: "14141A") : Color(hex: "E8E8FF")        // Bottom color - tiny hint of blue
+                colorScheme == .dark ? listColor.opacity(0.12) : listColor.opacity(0.25), // Top opacity - more subtle
+                colorScheme == .dark ? listColor.opacity(0.06) : listColor.opacity(0.15), // Upper middle - reduced
+                colorScheme == .dark ? listColor.opacity(0.03) : listColor.opacity(0.12), // Lower middle - minimal
+                colorScheme == .dark ? listColor.opacity(0.01) : listColor.opacity(0.06), // Start bottom fade - barely visible
+                colorScheme == .dark ? Color(hex: "10101A") : Color(hex: "E8E8FF")        // Bottom base
             ]
         } else {
-            // Default colors with more visible secondary gradient for "All Habits"
+            // Default gradient (All Habits) — more minimal
             baseColors = [
-                colorScheme == .dark ? Color.primary.opacity(0.20) : Color.primary.opacity(0.15),     // Top
-                colorScheme == .dark ? Color.secondary.opacity(0.12) : Color.secondary.opacity(0.08), // Upper middle
-                colorScheme == .dark ? Color.secondary.opacity(0.08) : Color.secondary.opacity(0.06), // Lower middle
-                colorScheme == .dark ? Color.secondary.opacity(0.06) : Color.secondary.opacity(0.03), // Start bottom fade
-                colorScheme == .dark ? Color(hex: "14141A") : Color(hex: "E8E8FF")                     // Bottom color - tiny hint of blue
+                colorScheme == .dark ? Color(hex: "10101A") : Color(hex: "E8E8FF"),                             // Top
+                colorScheme == .dark ? Color.secondary.opacity(0.06) : Color.secondary.opacity(0.03),           // Upper middle - reduced
+                colorScheme == .dark ? Color.secondary.opacity(0.04) : Color.secondary.opacity(0.06),           // Lower middle - minimal
+                colorScheme == .dark ? Color.secondary.opacity(0.02) : Color.secondary.opacity(0.03),           // Start bottom fade - barely visible
+                colorScheme == .dark ? Color(hex: "10101A") : Color(hex: "E8E8FF")                              // Bottom
             ]
         }
         
@@ -135,6 +135,7 @@ struct StatsView: View {
                                 }
                             }
                         )
+                        .padding(.horizontal, 50)
                         .offset(y: -60)
                     }
                     .padding(.horizontal, 5)
@@ -224,10 +225,9 @@ struct StatsView: View {
             // Clear pending updates
             pendingUpdates.removeAll()
             
-            // Trigger chart refresh
-            withAnimation(.easeOut(duration: 0.15)) {
+           
                 chartId = UUID()
-            }
+            
         }
         
         // ADD: Update a specific data point in the chart
@@ -282,11 +282,8 @@ struct StatsView: View {
                     wasCompleted: wasCompleted,
                     isCompleted: isCompleted
                 )
-                
-                // Animate the chart update
-                withAnimation(.easeOut(duration: 0.15)) {
                     chartId = UUID()
-                }
+                
             } else {
                 // View is hidden - queue the update for later
                 pendingUpdates.append((habit, date, wasCompleted, isCompleted))
@@ -303,10 +300,9 @@ struct StatsView: View {
                 for: selectedTimeRange,
                 habits: currentHabits
             ) {
-                // This will trigger a chart update
-                withAnimation(.easeOut(duration: 0.2)) {
+
                     chartId = UUID()
-                }
+
             }
         }
     // MARK: - Computed Properties
@@ -397,7 +393,7 @@ struct OptimizedCompletionTrendsCard: View {
                             .foregroundColor(.primary)
                         
                         Text(getLabelForTimeRange())
-                            .customFont("Lexend", .medium, 14)
+                            .customFont("Lexend", .medium, 13)
                             .foregroundColor(.secondary)
                     }
                     
@@ -406,7 +402,7 @@ struct OptimizedCompletionTrendsCard: View {
                     // Average badge - directly using computed property
                     VStack(alignment: .trailing, spacing: 2) {
                         AnimatedPercentage(
-                            value: currentTrendsData?.averageRate ?? 0,
+                            value: (currentTrendsData?.averageRate ?? 0) * 100,
                             font: .customFont("Lexend", .bold, 18),
                             color: chartColor
                         )
@@ -443,11 +439,12 @@ struct OptimizedCompletionTrendsCard: View {
                                 .frame(width: 340, height: 300)
                                 .padding(.horizontal, 20)
                                 // Use animation value instead of id
-                                .animation(.easeOut(duration: 0.15), value: dataManager.chartDataVersion)
+                                //.animation(.easeOut(duration: 0.15), value: dataManager.chartDataVersion)
                             }
             }
             .offset(y: -35)
         }
+        .padding(.leading, 5)
         // Force refresh when toggle happens
         //.id("\(chartId)-\(dataManager.lastToggleUpdate)")
     }
@@ -829,12 +826,70 @@ struct TimeRangeSelector: View {
     @Namespace private var animationNamespace
     
     var body: some View {
+        if #available(iOS 18.0, *) {
+            // Use iOS 18+ Picker with segmented style
+            modernPickerView
+        } else {
+            // Fall back to custom button-based selector
+            legacyButtonView
+        }
+    }
+    
+    // MARK: - iOS 18+ Modern Picker
+    @available(iOS 18.0, *)
+    private var modernPickerView: some View {
+        Picker("Time Range", selection: $selectedTimeRange) {
+            ForEach(TimeRange.allCases, id: \.self) { range in
+                Text(range.displayText)
+                    .tag(range)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.vertical, 4)
+        .tint(colorScheme == .dark ? Color(hex: "C9D4FF") : Color(hex: "4050B5"))
+        .onAppear {
+            configureSegmentedControlAppearance()
+        }
+        .onChange(of: colorScheme) { oldValue, newValue in
+            configureSegmentedControlAppearance()
+        }
+        .onChange(of: selectedTimeRange) { oldValue, newValue in
+            if oldValue != newValue {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.7)
+                onTimeRangeChanged(newValue)
+            }
+        }
+    }
+    
+    // Configure UISegmentedControl appearance for Lexend font and custom colors
+    private func configureSegmentedControlAppearance() {
+        let tintColor = colorScheme == .dark ? 
+            UIColor(Color(hex: "C9D4FF")) : 
+            UIColor(Color(hex: "4050B5"))
+        
+        // Configure normal state (unselected segments)
+        let normalAttributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont(name: "Lexend-Medium", size: 13) ?? UIFont.systemFont(ofSize: 13, weight: .medium),
+            .foregroundColor: UIColor.label.withAlphaComponent(0.7)
+        ]
+        
+        // Configure selected state
+        let selectedAttributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont(name: "Lexend-SemiBold", size: 13) ?? UIFont.systemFont(ofSize: 13, weight: .semibold),
+            .foregroundColor: colorScheme == .dark ? UIColor.black : UIColor.white
+        ]
+        
+        UISegmentedControl.appearance().setTitleTextAttributes(normalAttributes, for: .normal)
+        UISegmentedControl.appearance().setTitleTextAttributes(selectedAttributes, for: .selected)
+        UISegmentedControl.appearance().selectedSegmentTintColor = tintColor
+    }
+    
+    // MARK: - Legacy Custom Button View (iOS 17 and earlier)
+    private var legacyButtonView: some View {
         HStack(spacing: 4) {
             ForEach(TimeRange.allCases, id: \.self) { range in
                 Button {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8, blendDuration: 0)) {
-                        onTimeRangeChanged(range)
-                    }
+                    onTimeRangeChanged(range)
                 } label: {
                     Text(range.displayText)
                         .customFont("Lexend", selectedTimeRange == range ? .semiBold : .medium, 13)
@@ -913,15 +968,14 @@ struct AnimatedLabeledLineChart: View {
     let legend: String
     let chartStyle: ChartStyle
     
-    // Animation state
-    @State private var animationProgress: CGFloat = 0
+
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Title and legend
             HStack {
                 Text(title)
-                    .customFont("Lexend", .semiBold, 18)
+                    .customFont("Lexend", .semibold, 18)
                     .foregroundColor(chartStyle.textColor)
                 Spacer()
                 Text(legend)
@@ -929,9 +983,6 @@ struct AnimatedLabeledLineChart: View {
                     .foregroundColor(chartStyle.legendTextColor)
             }
             .padding(.bottom, 8)
-            
-            // The actual chart with clipping mask for animation
-            GeometryReader { geometry in
                 ZStack {
                     // Use our modified LineView with context labels
                     LineView(
@@ -943,21 +994,7 @@ struct AnimatedLabeledLineChart: View {
                         dataLabels: detailedLabels // Detailed labels for magnifier
                     )
                 }
-                .frame(height: geometry.size.height)
-            }
         }
-        .onAppear {
-            // Reset animation when view appears
-            animationProgress = 0
-            
-            // Start animation after a brief delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                withAnimation(.easeInOut(duration: 1.5)) {
-                    animationProgress = 1.0
-                }
-            }
-        }
-        
     }
 }
 
@@ -988,7 +1025,32 @@ extension Date {
 
 extension View {
     func customFont(_ fontName: String, _ weight: Font.Weight, _ size: CGFloat) -> some View {
-        self.font(.system(size: size, weight: weight))
+        // Map weight to Lexend font variants
+        let fontVariant: String
+        switch weight {
+        case .ultraLight:
+            fontVariant = "Lexend-ExtraLight"
+        case .thin:
+            fontVariant = "Lexend-Thin"
+        case .light:
+            fontVariant = "Lexend-Light"
+        case .regular:
+            fontVariant = "Lexend-Regular"
+        case .medium:
+            fontVariant = "Lexend-Medium"
+        case .semibold:
+            fontVariant = "Lexend-SemiBold"
+        case .bold:
+            fontVariant = "Lexend-Bold"
+        case .heavy:
+            fontVariant = "Lexend-ExtraBold"
+        case .black:
+            fontVariant = "Lexend-Black"
+        default:
+            fontVariant = "Lexend-Regular"
+        }
+        
+        return self.font(.custom(fontVariant, size: size))
     }
 }
 
@@ -1008,9 +1070,9 @@ extension StatsView {
                 // StatsView doesn't show archived habits, so we only handle list index changes
                 if !showArchived {
                     // Update the data manager's selected list (this will automatically refresh filtered habits)
-                    withAnimation(.easeInOut(duration: 0.4)) {
+                    
                         dataManager.updateSelectedList(listIndex)
-                    }
+                    
                     
                     // Regenerate chart with new data
                     chartId = UUID()

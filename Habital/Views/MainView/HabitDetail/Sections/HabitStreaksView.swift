@@ -21,7 +21,6 @@ struct HabitStreaksView: View {
     
     // Cached streak data
     @State private var streakData: StreakData?
-    @State private var isLoading = true
     
     // Performance optimization: Debounce rapid updates
     @State private var updateTask: Task<Void, Never>?
@@ -55,18 +54,35 @@ struct HabitStreaksView: View {
             ))
     }
     
-    // MARK: - Main Content (3 sections only)
+    // MARK: - Main Content (dynamic sections based on streak state)
     
     @ViewBuilder
     private var mainContent: some View {
         HStack(spacing: 0) {
-            currentStreakSection
-            Divider().padding(.vertical, 10)
-            bestStreakEverSection // Use habit.bestStreakEver
-            Divider().padding(.vertical, 10)
-            totalCompletionsSection
+            if shouldCombineStreaks {
+                // Combined section when current equals best
+                combinedCurrentBestSection
+                Divider().padding(.vertical, 10)
+                totalCompletionsSection
+            } else {
+                // Separate sections when current differs from best
+                currentStreakSection
+                Divider().padding(.vertical, 10)
+                bestStreakEverSection
+                Divider().padding(.vertical, 10)
+                totalCompletionsSection
+            }
         }
-        .glassBackground()
+        .frame(height: 70)
+        .sheetGlassBackground()
+    }
+    
+    // Helper computed property to determine if we should combine the streak sections
+    private var shouldCombineStreaks: Bool {
+        // Calculate current streak immediately without waiting for streakData
+        let currentStreak = habit.calculateStreak(upTo: date)
+        let bestStreak = Int(habit.bestStreakEver)
+        return currentStreak > 0 && currentStreak == bestStreak
     }
     
     @ViewBuilder
@@ -76,18 +92,15 @@ struct HabitStreaksView: View {
                 .font(.customFont("Lexend", .medium, 11))
                 .foregroundColor(.secondary)
             
-            if isLoading {
-                ProgressView()
-                    .frame(height: 24)
-            } else {
-                Text("\(streakData?.currentStreak ?? 0)")
-                    .font(.customFont("Lexend", .bold, 22))
-                    .foregroundColor(.primary)
-                    .contentTransition(.numericText())
-                    .animation(.easeOut(duration: 0.3), value: streakData?.currentStreak)
-            }
+            // Use immediate calculation if streakData not available yet
+            let currentStreak = streakData?.currentStreak ?? habit.calculateStreak(upTo: date)
+            Text("\(currentStreak)")
+                .font(.customFont("Lexend", .bold, 22))
+                .foregroundColor(.primary)
+                .contentTransition(.numericText())
+                .animation(.easeOut(duration: 0.3), value: streakData?.currentStreak)
             
-            Text((streakData?.currentStreak ?? 0) == 1 ? "day" : "days")
+            Text(currentStreak == 1 ? "day" : "days")
                 .font(.customFont("Lexend", .medium, 10))
                 .foregroundColor(.secondary)
         }
@@ -103,7 +116,7 @@ struct HabitStreaksView: View {
                 Text("Best Ever")
                     .font(.customFont("Lexend", .medium, 11))
                     .foregroundColor(.secondary)
-                
+                /*
                 // 🏆 Trophy icon if current streak equals best ever
                 if let streakData = streakData,
                    streakData.currentStreak > 0 &&
@@ -113,23 +126,47 @@ struct HabitStreaksView: View {
                         .foregroundColor(.green)
                         .opacity(0.8)
                 }
+                 */
             }
             
-            if isLoading {
-                ProgressView()
-                    .frame(height: 24)
-            } else {
-                Text("\(Int(habit.bestStreakEver))")
-                    .font(.customFont("Lexend", .bold, 22))
-                    .foregroundColor(Int(habit.bestStreakEver) == streakData?.currentStreak ? habitColor : .primary)
-                    .contentTransition(.numericText())
-                    .animation(.easeOut(duration: 0.3), value: Int(habit.bestStreakEver))
-                    // 🎉 Celebration animation for personal bests
-                    .scaleEffect(Int(habit.bestStreakEver) == streakData?.currentStreak &&
-                               (streakData?.currentStreak ?? 0) > 0 ? 1.1 : 1.0)
-                    .animation(.spring(response: 0.6, dampingFraction: 0.8),
-                              value: Int(habit.bestStreakEver) == streakData?.currentStreak)
-            }
+            Text("\(Int(habit.bestStreakEver))")
+                .font(.customFont("Lexend", .bold, 22))
+                .foregroundColor(Int(habit.bestStreakEver) == streakData?.currentStreak ? habitColor : .primary)
+                .foregroundColor(.primary)
+                .contentTransition(.numericText())
+                .animation(.easeOut(duration: 0.3), value: Int(habit.bestStreakEver))
+                // 🎉 Celebration animation for personal bests
+                .scaleEffect(Int(habit.bestStreakEver) == streakData?.currentStreak &&
+                           (streakData?.currentStreak ?? 0) > 0 ? 1.1 : 1.0)
+                .animation(.spring(response: 0.6, dampingFraction: 0.8),
+                          value: Int(habit.bestStreakEver) == streakData?.currentStreak)
+            
+            Text(Int(habit.bestStreakEver) == 1 ? "day" : "days")
+                .font(.customFont("Lexend", .medium, 10))
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+    }
+    
+    // MARK: - Combined Section (when current equals best)
+    
+    @ViewBuilder
+    private var combinedCurrentBestSection: some View {
+        VStack(spacing: 3) {
+            Text("Current & Best Streak")
+                .font(.customFont("Lexend", .medium, 11))
+                .foregroundColor(.secondary)
+            
+            // Use bestStreakEver directly since current equals best
+            Text("\(Int(habit.bestStreakEver))")
+                .font(.customFont("Lexend", .bold, 22))
+                .foregroundColor(habitColor)  // Use habit color to emphasize achievement
+                .contentTransition(.numericText())
+                .animation(.easeOut(duration: 0.3), value: Int(habit.bestStreakEver))
+                // 🎉 Celebration animation for personal bests
+                .scaleEffect(1.05)  // Slightly larger to celebrate the achievement
+                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: Int(habit.bestStreakEver))
             
             Text(Int(habit.bestStreakEver) == 1 ? "day" : "days")
                 .font(.customFont("Lexend", .medium, 10))
@@ -146,16 +183,11 @@ struct HabitStreaksView: View {
                 .font(.customFont("Lexend", .medium, 11))
                 .foregroundColor(.secondary)
             
-            if isLoading {
-                ProgressView()
-                    .frame(height: 24)
-            } else {
-                Text("\(animatedTotalCompletions)")
-                    .font(.customFont("Lexend", .bold, 22))
-                    .foregroundColor(.primary)
-                    .contentTransition(.numericText())
-                    .animation(.easeOut(duration: 0.3), value: animatedTotalCompletions)
-            }
+            Text("\(animatedTotalCompletions)")
+                .font(.customFont("Lexend", .bold, 22))
+                .foregroundColor(.primary)
+                .contentTransition(.numericText())
+                .animation(.easeOut(duration: 0.3), value: animatedTotalCompletions)
             
             if !habit.isBadHabit {
                 Text(animatedTotalCompletions == 1 ? "completion" : "completions")
@@ -191,7 +223,6 @@ struct HabitStreaksView: View {
                     isActive: currentStreak > 0
                 )
                 self.animatedTotalCompletions = totalCompletions
-                self.isLoading = false
             }
         }
     }
@@ -221,7 +252,6 @@ struct HabitStreaksView: View {
                         isActive: currentStreak > 0
                     )
                     self.animatedTotalCompletions = totalCompletions
-                    self.isLoading = false
                 }
             }
         }

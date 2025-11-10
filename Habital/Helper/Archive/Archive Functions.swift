@@ -17,6 +17,9 @@ func toggleArchiveHabit(habit: Habit, context: NSManagedObjectContext) {
     do {
         try context.save()
         print("Successfully \(habit.isArchived ? "archived" : "unarchived") habit: \(habit.name ?? "Unknown")")
+        
+        // Notify that caches should be invalidated
+        NotificationCenter.default.post(name: NSNotification.Name("HabitUpdated"), object: nil)
     } catch {
         // Handle any errors during save
         print("Failed to save context after toggling archive status: \(error.localizedDescription)")

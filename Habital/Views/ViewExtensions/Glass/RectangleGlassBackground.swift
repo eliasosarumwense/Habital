@@ -46,29 +46,29 @@ struct GlassBackgroundModifier: ViewModifier {
             content
                 .background(
                     ZStack {
-                        // Glass morphism background with optional color tint
+                        // Ultra-transparent glass morphism background
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(.ultraThinMaterial)
+                            .fill(.ultraThinMaterial.opacity(0.6))
                         
-                        // Optional color tint overlay
+                        // Minimal color tint overlay
                         if let tintColor = tintColor {
                             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                                 .fill(
-                                    tintColor.opacity(colorScheme == .dark ? 0.08 : 0.15)
+                                    tintColor.opacity(colorScheme == .dark ? 0.015 : 0.025)
                                 )
                         }
                         
-                        // Enhanced inner glow for better light mode visibility
+                        // Barely visible inner glow
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .fill(
                                 LinearGradient(
                                     colors: colorScheme == .dark ? [
-                                        Color.white.opacity(0.05),
+                                        Color.white.opacity(0.008),
                                         Color.clear,
                                         Color.clear
                                     ] : [
-                                        Color.white.opacity(0.6),
-                                        Color.white.opacity(0.2),
+                                        Color.white.opacity(0.08),
+                                        Color.white.opacity(0.03),
                                         Color.clear
                                     ],
                                     startPoint: .top,
@@ -76,33 +76,33 @@ struct GlassBackgroundModifier: ViewModifier {
                                 )
                             )
                         
-                        // Enhanced border for better light mode contrast
+                        // Enhanced visibility border
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .strokeBorder(
                                 LinearGradient(
                                     colors: colorScheme == .dark ? [
-                                        Color.white.opacity(0.15),
+                                        Color.white.opacity(0.12),
                                         Color.primary.opacity(0.08),
-                                        Color.clear
+                                        Color.white.opacity(0.04)
                                     ] : [
-                                        Color.white.opacity(0.8),
-                                        Color.gray.opacity(0.3),
-                                        Color.black.opacity(0.1)
+                                        Color.white.opacity(0.25),
+                                        Color.gray.opacity(0.2),
+                                        Color.black.opacity(0.08)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
-                                lineWidth: borderWidth
+                                lineWidth: borderWidth * 0.5
                             )
                         
-                        // Additional subtle shadow for light mode depth
+                        // Almost invisible shadow
                         if colorScheme == .light {
                             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                                 .fill(
                                     RadialGradient(
                                         colors: [
                                             Color.clear,
-                                            Color.black.opacity(0.03)
+                                            Color.black.opacity(0.005)
                                         ],
                                         center: .center,
                                         startRadius: 0,
@@ -205,6 +205,97 @@ struct LightGlassBackgroundModifier: ViewModifier {
                     }
                 )
         }
+    }
+}
+
+// MARK: - Sheet Glass Background
+struct SheetGlassBackgroundModifier: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    
+    let cornerRadius: CGFloat
+    let borderWidth: CGFloat
+    let tintColor: Color?
+    let interactiveGlass: Bool
+    
+    init(cornerRadius: CGFloat = 30, borderWidth: CGFloat = 1.5, tintColor: Color? = nil, interactiveGlass: Bool = false) {
+        self.cornerRadius = cornerRadius
+        self.borderWidth = borderWidth
+        self.tintColor = tintColor
+        self.interactiveGlass = interactiveGlass
+    }
+    
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        // Always use the fallback implementation for sheets to ensure consistent appearance
+        content
+            .background(
+                ZStack {
+                    // More transparent glass morphism background
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(.ultraThinMaterial.opacity(colorScheme == .dark ? 0.3 : 0.7))
+                    
+                    // Optional color tint overlay with reduced opacity
+                    if let tintColor = tintColor {
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(
+                                tintColor.opacity(colorScheme == .dark ? 0.04 : 0.08)
+                            )
+                    }
+                    
+                    // More subtle inner glow
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: colorScheme == .dark ? [
+                                    Color.white.opacity(0.02),
+                                    Color.clear,
+                                    Color.clear
+                                ] : [
+                                    Color.white.opacity(0.3),
+                                    Color.white.opacity(0.1),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                    
+                    // Enhanced border with better light mode visibility
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: colorScheme == .dark ? [
+                                    Color.white.opacity(0.04),
+                                    Color.primary.opacity(0.02),
+                                    Color.clear
+                                ] : [
+                                    Color.white.opacity(0.6),
+                                    Color.gray.opacity(0.3),
+                                    Color.black.opacity(0.15)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: borderWidth * 0.5
+                        )
+                    
+                    // More subtle shadow for light mode
+                    if colorScheme == .light {
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(
+                                RadialGradient(
+                                    colors: [
+                                        Color.clear,
+                                        Color.black.opacity(0.015)
+                                    ],
+                                    center: .center,
+                                    startRadius: 0,
+                                    endRadius: 100
+                                )
+                            )
+                    }
+                }
+            )
     }
 }
 
@@ -360,6 +451,28 @@ extension View {
         ))
     }
     
+    /// Applies a sheet-optimized glass background effect with consistent glassmorphism styling
+    /// Uses the same fallback implementation across all iOS versions for sheet consistency
+    /// - Parameters:
+    ///   - cornerRadius: The corner radius for the glass effect (default: 30)
+    ///   - borderWidth: The width of the gradient border (default: 1.5)
+    ///   - tintColor: Optional color tint for the glass effect
+    ///   - interactiveGlass: Parameter maintained for API consistency (not used in sheet version)
+    /// - Returns: A view with the sheet glass background applied
+    func sheetGlassBackground(
+        cornerRadius: CGFloat = 30,
+        borderWidth: CGFloat = 1.5,
+        tintColor: Color? = nil,
+        interactiveGlass: Bool = false
+    ) -> some View {
+        modifier(SheetGlassBackgroundModifier(
+            cornerRadius: cornerRadius,
+            borderWidth: borderWidth,
+            tintColor: tintColor,
+            interactiveGlass: interactiveGlass
+        ))
+    }
+    
     /// Applies a lightweight glass background effect optimized for performance
     /// - Parameters:
     ///   - cornerRadius: The corner radius for the glass effect (default: 16)
@@ -456,6 +569,35 @@ struct GlassBackgroundPreview: View {
                     Text("Custom with Purple Tint")
                         .padding()
                         .glassBackground(cornerRadius: 15, tintColor: .purple)
+                }
+                
+                Divider()
+                    .padding(.vertical)
+                
+                Group {
+                    // Sheet glass background examples
+                    Text("Sheet Glass Effect")
+                        .padding()
+                        .sheetGlassBackground()
+                    
+                    Text("Sheet Glass with Blue Tint")
+                        .padding()
+                        .sheetGlassBackground(tintColor: .blue)
+                    
+                    Text("Sheet Glass with Custom Radius")
+                        .padding()
+                        .sheetGlassBackground(cornerRadius: 15, tintColor: .purple)
+                    
+                    // Card-style sheet glass
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Sheet Glass Card")
+                            .font(.headline)
+                        Text("This sheet glass background uses the same consistent fallback UI across all iOS versions, perfect for sheets and modal presentations.")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                    .sheetGlassBackground(cornerRadius: 16, tintColor: .green)
                 }
                 
                 Divider()

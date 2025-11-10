@@ -43,7 +43,7 @@ struct ShimmerEffectGitGrid: ViewModifier {
 
 // MARK: - Convenience Extension
 extension View {
-    func shimmer() -> some View {
+    func shimmerGitGrid() -> some View {
         self.modifier(ShimmerEffectGitGrid())
     }
 }

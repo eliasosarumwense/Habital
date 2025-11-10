@@ -53,13 +53,52 @@ struct AnimatedPercentage: View {
                 )
             )
             .onAppear {
-                displayValue = value
+                animatePercentageCounter(to: value)
             }
             .onChange(of: value) { oldValue, newValue in
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                    displayValue = newValue
-                }
+                animatePercentageCounter(to: newValue)
             }
+    }
+    
+    // MARK: - Smooth Percentage Animation
+    @MainActor
+    private func animatePercentageCounter(to targetPercentage: Double) {
+        // Start from current value for smoother transitions
+        let startValue = displayValue
+        
+        // Custom animation that counts fast initially and slows down at the end
+        let totalDuration: TimeInterval = 0.88
+        let updateInterval: TimeInterval = 0.016 // ~60fps for smoother animation
+        let totalSteps = Int(totalDuration / updateInterval)
+        
+        // Create a smooth easing function that starts fast and slows down at the end
+        func customEasingFunction(progress: Double) -> Double {
+            // Ease-out cubic with smoother transition
+            return 1 - pow(1 - progress, 2.5)
+        }
+        
+        // Animate with discrete steps for counting effect
+        Task {
+            for step in 0...totalSteps {
+                let progress = Double(step) / Double(totalSteps)
+                let easedProgress = customEasingFunction(progress: progress)
+                let currentValue = startValue + (targetPercentage - startValue) * easedProgress
+                
+                await MainActor.run {
+                    // Round to avoid floating point precision issues
+                    let roundedValue = round(currentValue * 10) / 10
+                    self.displayValue = min(targetPercentage, max(0, roundedValue))
+                }
+                
+                // Consistent timing for smoother animation
+                try? await Task.sleep(nanoseconds: UInt64(updateInterval * 1_000_000_000))
+            }
+            
+            // Ensure we end exactly at target value
+            await MainActor.run {
+                self.displayValue = targetPercentage
+            }
+        }
     }
 }
 

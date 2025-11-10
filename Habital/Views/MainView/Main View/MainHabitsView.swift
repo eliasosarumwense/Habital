@@ -7,20 +7,16 @@
 import SwiftUI
 import CoreData
 
-
-//
-//  MainHabitsView.swift
-//  Habital
-//
-//  Created by Elias Osarumwense on 29.03.25.
-//
 struct MainHabitsView: View {
     
     @EnvironmentObject var dataManager: StatsDataManager
     @StateObject var progressOverlayManager = ProgressOverlayManager()
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.managedObjectContext) var viewContext
-    @StateObject private var toggleManager = HabitToggleManager(context: PersistenceController.shared.container.viewContext)
+    
+    // 🔄 Use shared toggleManager from environment instead of creating new instance
+    @EnvironmentObject var toggleManager: HabitToggleManager
+    
     // Use the preloaded habit manager
     @EnvironmentObject var habitManager: HabitPreloadManager
     
@@ -60,6 +56,9 @@ struct MainHabitsView: View {
     // Efficient caching for filtered habits
     @State var filteredHabitsCache: [String: [Habit]] = [:]
     
+    // Current filtered habits for the selected date
+    @State private var currentFilteredHabits: [Habit] = []
+    
     @AppStorage("showInactiveHabits") private var showInactiveHabits = true
     @AppStorage("groupCompletedHabits") private var groupCompletedHabits = false
     
@@ -79,7 +78,7 @@ struct MainHabitsView: View {
     @State private var showingInsightsView = false
     @State private var showingComprehensiveAnalytics = false
     @State private var weekTimelineID = UUID()
-
+    @State private var dayViewRefreshTrigger = UUID()
     
     
     enum ListChangeDirection {
@@ -123,7 +122,8 @@ struct MainHabitsView: View {
             print("📊 Returning \(result.count) habits from habitManager")
             return result
         } else {
-            let result = Array(habits.filter { !$0.isArchived })
+            // Don't filter archived here - let filteredHabits(for:) handle it
+            let result = Array(habits)
             print("📊 Returning \(result.count) habits from FetchRequest")
             return result
         }
@@ -189,22 +189,22 @@ struct MainHabitsView: View {
         
         if let selectedList = getSelectedHabitList(),
            let listColor = getListColor(from: selectedList) {
-            // Use list color when available - fades from top and bottom
+            // Use list color when available — very subtle in dark mode
             baseColors = [
-                colorScheme == .dark ? listColor.opacity(0.18) : listColor.opacity(0.25), // Top opacity
-                colorScheme == .dark ? listColor.opacity(0.10) : listColor.opacity(0.15), // Upper middle
-                colorScheme == .dark ? listColor.opacity(0.08) : listColor.opacity(0.12), // Lower middle
-                colorScheme == .dark ? listColor.opacity(0.05) : listColor.opacity(0.06), // Start bottom fade
-                colorScheme == .dark ? Color(hex: "14141A") : Color(hex: "E8E8FF")        // Bottom color - tiny hint of blue
+                colorScheme == .dark ? listColor.opacity(0.12) : listColor.opacity(0.25), // Top opacity - more subtle
+                colorScheme == .dark ? listColor.opacity(0.06) : listColor.opacity(0.15), // Upper middle - reduced
+                colorScheme == .dark ? listColor.opacity(0.03) : listColor.opacity(0.12), // Lower middle - minimal
+                colorScheme == .dark ? listColor.opacity(0.01) : listColor.opacity(0.06), // Start bottom fade - barely visible
+                colorScheme == .dark ? Color(hex: "10101A") : Color(hex: "E8E8FF")        // Bottom base
             ]
         } else {
-            // Default colors with more visible secondary gradient for "All Habits"
+            // Default gradient (All Habits) — more minimal
             baseColors = [
-                colorScheme == .dark ? Color.primary.opacity(0.20) : Color.primary.opacity(0.15),     // Top
-                colorScheme == .dark ? Color.secondary.opacity(0.12) : Color.secondary.opacity(0.08), // Upper middle
-                colorScheme == .dark ? Color.secondary.opacity(0.08) : Color.secondary.opacity(0.06), // Lower middle
-                colorScheme == .dark ? Color.secondary.opacity(0.06) : Color.secondary.opacity(0.03), // Start bottom fade
-                colorScheme == .dark ? Color(hex: "14141A") : Color(hex: "E8E8FF")                     // Bottom color - tiny hint of blue
+                colorScheme == .dark ? Color(hex: "10101A") : Color(hex: "E8E8FF"),                             // Top
+                colorScheme == .dark ? Color.secondary.opacity(0.06) : Color.secondary.opacity(0.03),           // Upper middle - reduced
+                colorScheme == .dark ? Color.secondary.opacity(0.04) : Color.secondary.opacity(0.06),           // Lower middle - minimal
+                colorScheme == .dark ? Color.secondary.opacity(0.02) : Color.secondary.opacity(0.03),           // Start bottom fade - barely visible
+                colorScheme == .dark ? Color(hex: "10101A") : Color(hex: "E8E8FF")                              // Bottom
             ]
         }
         
@@ -215,6 +215,9 @@ struct MainHabitsView: View {
         )
         .ignoresSafeArea()
     }
+
+
+
     
     var body: some View {
         
@@ -240,7 +243,7 @@ struct MainHabitsView: View {
             MainCreateHabitView(
                 onHabitCreated: {
                     // Invalidate cache when habit is created
-                    invalidateCaches()
+                    // invalidateCaches()
                     // Dismiss the sheet
                     showingCreateHabitView = false
                 }
@@ -260,12 +263,28 @@ struct MainHabitsView: View {
         }
         
         
-        .onChange(of: showArchivedHabits) { _, _ in invalidateCaches() }
+        .onChange(of: selectedDate) { oldValue, newValue in
+            // Update filtered habits when date changes
+            //updateFilteredHabits()
+        }
+        .onChange(of: showArchivedHabits) { _, _ in
+            // invalidateCaches()
+            updateFilteredHabits()
+        }
         .onChange(of: selectedListIndex) { oldValue, newValue in
-            // IMPORTANT: Update list index FIRST before any date changes
+            // IMPORTANT: Clear cache FIRST to ensure fresh data
+            // filteredHabitsCache.removeAll()
+            
+            // Update list index
             habitManager.currentListIndex = newValue
             
-            // ✅ FIX #1: Use your existing cached method + new earliest date cache
+            // Update habitsVersion to trigger WeekTimelineView refresh
+            habitsVersion = UUID()
+            
+            // Update filtered habits for new list
+            updateFilteredHabits()
+            
+            // Use your existing cached method + new earliest date cache
             let newFilteredHabits = habitManager.getHabitsForList(newValue)
             let newEarliestDate = habitManager.getCachedEarliestDate(newValue)
             
@@ -275,7 +294,7 @@ struct MainHabitsView: View {
                 // Jump to the earliest valid date WITHOUT animation to prevent conflicts
                 selectedDate = habitManager.navigateToEarliestValidDate()
                 
-                // ✅ FIX #2: Remove DispatchQueue delay - execute immediately
+                // Execute immediately - no async
                 NotificationCenter.default.post(
                     name: NSNotification.Name("ForceCalendarUpdate"),
                     object: nil,
@@ -292,10 +311,7 @@ struct MainHabitsView: View {
             // Update cached selection
             UserDefaults.saveSelectedListIndex(newValue)
             
-            // ✅ FIX #3: Smart cache invalidation instead of destroying everything
-            invalidateListSpecificCache(oldList: oldValue, newList: newValue)
-            
-            // Rest of your existing code...
+            // Update direction tracking
             previousListIndex = oldValue
             if newValue > oldValue {
                 listChangeDirection = .right
@@ -304,9 +320,7 @@ struct MainHabitsView: View {
             } else {
                 listChangeDirection = .none
             }
-            
-            habitsVersion = UUID()
-            weekTimelineID = UUID()
+            //HabitUtilities.clearHabitActivityCache()
         }
         .onDisappear {
             UserDefaults.saveSelectedListIndex(selectedListIndex)
@@ -320,6 +334,8 @@ struct MainHabitsView: View {
                 habitManager.refresh(context: viewContext)
             }
             
+            // Initialize filtered habits for the selected date
+            updateFilteredHabits()
             
             /*
             // Initialize StatsView instance on first load
@@ -328,15 +344,17 @@ struct MainHabitsView: View {
             }
              */
         }
+        /*
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HabitCompleted"))) { _ in
             // Refresh preloaded data when habits are completed
             habitManager.refresh(context: viewContext)
             invalidateCaches()
         }
+         */
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HabitCreated"))) { _ in
             // Refresh preloaded data when new habits are created
             habitManager.refresh(context: viewContext)
-            invalidateCaches()
+            // invalidateCaches()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HabitIntervalCompleted"))) { _ in
             // Refresh your view
@@ -356,7 +374,7 @@ struct MainHabitsView: View {
             UserDefaults.saveSelectedListIndex(listIndex)
             
             // Invalidate caches to refresh the view
-            invalidateCaches()
+            // invalidateCaches()
             
             // Force refresh habits version to trigger view updates
             habitsVersion = UUID()
@@ -364,7 +382,18 @@ struct MainHabitsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HabitUpdated"))) { _ in
             // Refresh preloaded data when habits are updated (including startDate changes)
             habitManager.refresh(context: viewContext)
-            invalidateCaches()
+            // invalidateCaches()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HabitToggled"))) { _ in
+            // When a habit is toggled, clear the filtered habits cache
+            // This ensures the progress calculation uses fresh data
+            //filteredHabitsCache.removeAll()
+            
+            // Update filtered habits
+            //updateFilteredHabits()
+            
+            // Update habitsVersion to trigger WeekTimelineView refresh
+            //habitsVersion = UUID()
         }
     }
     
@@ -394,17 +423,17 @@ struct MainHabitsView: View {
     }
     
     private func invalidateListSpecificCache(oldList: Int, newList: Int) {
-        filteredHabitsCache.removeAll()
+        // filteredHabitsCache.removeAll()
             
             // 2. Reset cached list index
-            cachedListIndex = -1
+            // cachedListIndex = -1
             
             
             
             
             
             // 4. Clear DayKeyCache for affected habits
-            DayKeyCache.shared.invalidateAll()
+            // DayKeyCache.shared.invalidateAll()
     }
     
     // MARK: - Layer Components
@@ -463,8 +492,10 @@ struct MainHabitsView: View {
                     
                     if !showArchivedHabits {
                         WeekTimelineView(
+                            toggleManager: toggleManager,
                             selectedDate: $selectedDate,
                             weekOffset: $weekOffset,
+                            filteredHabits: $currentFilteredHabits,
                             onDateSelected: { newDate in
                                 guard !self.isAnimatingDateChange else { return }
                                 self.selectedDate = newDate
@@ -472,49 +503,52 @@ struct MainHabitsView: View {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                                     self.isAnimatingDateChange = false
                                 }
+                                 
                             },
                             getFilteredHabits: { date in
                                 // During animation prefer the cached result; fall back to fresh compute.
-                                if isAnimatingDateChange, let cached = cachedFilteredHabits(for: date) {
-                                    return cached
-                                }
+                               if isAnimatingDateChange, let cached = cachedFilteredHabits(for: date) {
+                                  return cached
+                               }
+                                 
                                 return filteredHabits(for: date)
-                            }
+                            },
+                            habitsVersion: habitsVersion
                         )
-                        .padding(.top, 7)
-                        .id(weekTimelineID)
+                        //.padding(.top, 3)
                     }
                     
                     DailyHabitsView(
                         date: selectedDate,
-                        habits: {
-                                let result = filteredHabits(for: selectedDate)
-                                print("🎯 Passing \(result.count) habits to DailyHabitsView")
-                                return result
-                            }(),
+                        habits: $currentFilteredHabits,
                         isHabitActive: { habit in
                             HabitUtilities.isHabitActive(habit: habit, on: selectedDate)
                         },
                         isHabitCompleted: { habit in
                             //isHabitCompletedForDate(habit, on: selectedDate)
                             toggleManager.isHabitCompletedForDate(habit, on: selectedDate)
+                            //invalidateCaches()
                         },
                         toggleCompletion: { habit in
                             //toggleCompletion(for: habit, on: selectedDate)
-                            toggleManager.toggleCompletion(for: habit, on: selectedDate, dataManager: dataManager)
+                            //toggleManager.toggleCompletion(for: habit, on: selectedDate, dataManager: dataManager)
+                            //invalidateCaches()
+                            
+                            
                         },
                         getNextOccurrenceText: { habit in
                             HabitUtilities.getNextOccurrenceText(for: habit, selectedDate: selectedDate)
                         },
                         onHabitDeleted: {
-                            invalidateCaches()
+                            // invalidateCaches()
+                            updateFilteredHabits()
                         },
                         showArchivedHabits: $showArchivedHabits,
                         listChangeDirection: listChangeDirection,
                         listChangeID: selectedListIndex
                     )
                     .id("dailyHabits-\(habitsVersion)")
-                    //.animation(.spring(response: 0.4, dampingFraction: 0.8), value: habits.map { $0.id })
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: habits.map { $0.id })
                     //.animation(.spring(response: 0.4, dampingFraction: 0.9), value: selectedDate)
                     
                     Color.clear.frame(height: 90)
@@ -549,7 +583,8 @@ struct MainHabitsView: View {
     @State private var showStatsListSelection = false
     
     private var filteredStatsHabits: [Habit] {
-        let allHabits = Array(effectiveHabits.filter { !$0.isArchived }) // Use effective habits
+        // Respect the showArchivedHabits setting in stats view too
+        let allHabits = Array(effectiveHabits.filter { showArchivedHabits ? $0.isArchived : !$0.isArchived })
         
         if selectedStatsListIndex == 0 {
             // All habits
@@ -641,11 +676,18 @@ struct MainHabitsView: View {
     
     // Centralized method to invalidate all caches and refresh preloaded data
     func invalidateCaches() {
+        // Clear all caches synchronously
         HabitUtilities.clearHabitActivityCache()
-        filteredHabitsCache = [:]
+        // filteredHabitsCache.removeAll()
+        // DayKeyCache.shared.invalidateAll()
         
         // Refresh preloaded data
         habitManager.refresh(context: viewContext)
+    }
+    
+    // Helper function to update the current filtered habits
+    private func updateFilteredHabits() {
+        currentFilteredHabits = filteredHabits(for: selectedDate)
     }
     
     private func handlePullToOpen() {
@@ -685,14 +727,15 @@ struct MainHabitsView: View {
     func filteredHabits(for date: Date) -> [Habit] {
         let calendar = Calendar.current
         let normalizedDate = calendar.startOfDay(for: date)
-
-        // Fast path: cached (use helper)
-        if let cached = filteredHabitsCache[cacheKey(for: date)] {
-            return cached
+        let key = cacheKey(for: date)
+        
+        
+         if let cached = filteredHabitsCache[key] {
+             return cached
         }
 
         // Always start from the unified source
-        var habitArray = effectiveHabits
+        var habitArray = Array(habits) //effectiveHabits
 
         // Archived filtering
         habitArray = habitArray.filter { showArchivedHabits ? $0.isArchived : !$0.isArchived }
@@ -744,27 +787,24 @@ struct MainHabitsView: View {
             }
         }
 
-        // Async cache write on main actor
-        let key = cacheKey(for: date)
-        Task { @MainActor in
-            filteredHabitsCache[key] = sorted
-        }
+        // SYNCHRONOUS cache write - no race condition
+        filteredHabitsCache[key] = sorted
 
         return sorted
     }
 
     private func cacheKey(for date: Date) -> String {
-        let d = Calendar.current.startOfDay(for: date).timeIntervalSince1970
+         let d = Calendar.current.startOfDay(for: date).timeIntervalSince1970
         return "\(d)|\(selectedListIndex)|\(showArchivedHabits ? 1 : 0)|\(sortOption.rawValue)"
     }
 
-    // ADD
-    private func cachedFilteredHabits(for date: Date) -> [Habit]? {
-        filteredHabitsCache[cacheKey(for: date)]
+ 
+     private func cachedFilteredHabits(for date: Date) -> [Habit]? {
+     filteredHabitsCache[cacheKey(for: date)]
     }
     
     // Add this property to your MainHabitsView
-    @State private var cachedListIndex: Int = -1
+    // @State private var cachedListIndex: Int = -1
     
     // Original single completion toggle logic
     private func toggleSingleCompletion(for habit: Habit, on date: Date) {
@@ -798,7 +838,7 @@ struct MainHabitsView: View {
         do {
             try viewContext.save()
             // Invalidate caches after updating
-            invalidateCaches()
+            // invalidateCaches()
         } catch {
             print("Error updating completion status: \(error)")
         }
@@ -821,10 +861,10 @@ struct MainHabitsView: View {
         
         return formatter.string(from: selectedDate)
     }
-    private func createProgressCacheKey(for date: Date) -> String {
-        let normalizedDate = Calendar.current.startOfDay(for: date)
-        return "progress-\(normalizedDate.timeIntervalSince1970)-\(selectedListIndex)"
-    }
+    // private func createProgressCacheKey(for date: Date) -> String {
+    //     let normalizedDate = Calendar.current.startOfDay(for: date)
+    //     return "progress-\(normalizedDate.timeIntervalSince1970)-\(selectedListIndex)"
+    // }
     
     // ULTRA OPTIMIZED: Minimal calculation with early exits and bad habit fix
     func calculateDailyProgressOptimized(for date: Date) -> Double {
@@ -901,38 +941,38 @@ extension Binding {
 }
 
 // Create a class for habit activity caching
-class HabitActivityCache: ObservableObject {
-    // Use TimeInterval as keys for dates for better performance
-    private var cache: [String: [TimeInterval: Bool]] = [:]
-    
-    func isHabitActive(habit: Habit, on date: Date, startDate: Date) -> Bool {
-        let calendar = Calendar.current
-        let normalizedDate = calendar.startOfDay(for: date)
-        let dateKey = normalizedDate.timeIntervalSince1970
-        
-        guard let habitID = habit.id?.uuidString else {
-            return HabitUtilities.isHabitActive(on: date, startDate: startDate, repeatPattern: habit)
-        }
-        
-        // Check cache
-        if let dateCache = cache[habitID], let result = dateCache[dateKey] {
-            return result
-        }
-        
-        // Calculate result
-        let result = HabitUtilities.isHabitActive(on: date, startDate: startDate, repeatPattern: habit)
-        
-        // Update cache
-        if cache[habitID] == nil {
-            cache[habitID] = [:]
-        }
-        cache[habitID]?[dateKey] = result
-        
-        return result
-    }
-    
-    func clearCache() {
-        cache = [:]
-    }
-}
+// class HabitActivityCache: ObservableObject {
+//     // Use TimeInterval as keys for dates for better performance
+//     private var cache: [String: [TimeInterval: Bool]] = [:]
+//     
+//     func isHabitActive(habit: Habit, on date: Date, startDate: Date) -> Bool {
+//         let calendar = Calendar.current
+//         let normalizedDate = calendar.startOfDay(for: date)
+//         let dateKey = normalizedDate.timeIntervalSince1970
+//         
+//         guard let habitID = habit.id?.uuidString else {
+//             return HabitUtilities.isHabitActive(on: date, startDate: startDate, repeatPattern: habit)
+//         }
+//         
+//         // Check cache
+//         if let dateCache = cache[habitID], let result = dateCache[dateKey] {
+//             return result
+//         }
+//         
+//         // Calculate result
+//         let result = HabitUtilities.isHabitActive(on: date, startDate: startDate, repeatPattern: habit)
+//         
+//         // Update cache
+//         if cache[habitID] == nil {
+//             cache[habitID] = [:]
+//         }
+//         cache[habitID]?[dateKey] = result
+//         
+//         return result
+//     }
+//     
+//     func clearCache() {
+//         cache = [:]
+//     }
+// }
 

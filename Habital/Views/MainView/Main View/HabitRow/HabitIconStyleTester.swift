@@ -7,9 +7,9 @@
 
 import SwiftUI
 
-// MARK: - Style 1: Soft Minimal
+// MARK: - Style 1: Soft Minimal (Enhanced)
 
-/// Clean, minimalist design with subtle gradients and soft shadows
+/// Clean, minimalist design with sophisticated internal color gradients
 struct SoftMinimalIconView: View {
     let iconName: String?
     let isActive: Bool
@@ -19,34 +19,96 @@ struct SoftMinimalIconView: View {
     
     var body: some View {
         ZStack {
-            // Soft background with subtle elevation
+            // Multi-stop radial gradient background for depth
             Circle()
                 .fill(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            Color(.systemBackground),
-                            Color(.systemBackground).opacity(0.95)
+                    RadialGradient(
+                        gradient: Gradient(stops: [
+                            .init(color: habitColor.opacity(isActive ? 0.25 : 0.1), location: 0.0),
+                            .init(color: habitColor.opacity(isActive ? 0.18 : 0.07), location: 0.4),
+                            .init(color: habitColor.opacity(isActive ? 0.12 : 0.05), location: 0.7),
+                            .init(color: habitColor.opacity(isActive ? 0.08 : 0.03), location: 1.0)
                         ]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+                        center: UnitPoint(x: 0.35, y: 0.35),
+                        startRadius: 2,
+                        endRadius: 25
                     )
                 )
                 .frame(width: 41, height: 41)
-                .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.08), radius: 4, x: 0, y: 2)
+                .overlay(
+                    // Subtle highlight on top-left
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                gradient: Gradient(colors: [
+                                    Color.white.opacity(colorScheme == .dark ? 0.12 : 0.25),
+                                    Color.clear
+                                ]),
+                                center: UnitPoint(x: 0.3, y: 0.3),
+                                startRadius: 2,
+                                endRadius: 18
+                            )
+                        )
+                )
+                .overlay(
+                    // Darker shading on bottom-right
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                gradient: Gradient(colors: [
+                                    Color.clear,
+                                    (colorScheme == .dark ? Color.black : habitColor).opacity(isActive ? 0.15 : 0.08)
+                                ]),
+                                center: UnitPoint(x: 0.7, y: 0.7),
+                                startRadius: 8,
+                                endRadius: 22
+                            )
+                        )
+                )
+                // Sophisticated gradient border
                 .overlay(
                     Circle()
                         .strokeBorder(
-                            habitColor.opacity(isActive ? 0.3 : 0.15),
-                            lineWidth: 2
+                            AngularGradient(
+                                gradient: Gradient(stops: [
+                                    .init(color: habitColor.opacity(isActive ? 0.6 : 0.25), location: 0.0),
+                                    .init(color: habitColor.opacity(isActive ? 0.3 : 0.12), location: 0.25),
+                                    .init(color: habitColor.opacity(isActive ? 0.5 : 0.2), location: 0.5),
+                                    .init(color: habitColor.opacity(isActive ? 0.4 : 0.15), location: 0.75),
+                                    .init(color: habitColor.opacity(isActive ? 0.6 : 0.25), location: 1.0)
+                                ]),
+                                center: .center,
+                                startAngle: .degrees(135),
+                                endAngle: .degrees(495)
+                            ),
+                            lineWidth: isActive ? 2.0 : 1.5
                         )
                 )
+                // Inner accent ring
+                .overlay(
+                    Circle()
+                        .strokeBorder(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.white.opacity(colorScheme == .dark ? 0.2 : 0.35),
+                                    Color.clear,
+                                    Color.clear
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.8
+                        )
+                        .padding(2)
+                )
             
-            // Icon
+            // Icon with enhanced color treatment
             if let iconName = iconName, !iconName.isEmpty {
                 if iconName.count == 1 || (iconName.first?.isEmoji ?? false) {
                     Text(iconName)
                         .font(.system(size: 25))
-                        .saturation(isActive ? 1.0 : 0.0)
+                        .saturation(isActive ? 1.2 : 0.0)
+                        .brightness(isActive ? 0.05 : 0.0)
                         .opacity(isActive ? 1.0 : 0.6)
                 } else {
                     Image(systemName: iconName)
@@ -54,16 +116,26 @@ struct SoftMinimalIconView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 22, height: 22)
-                        .foregroundColor(isActive ? habitColor : .gray)
+                        .foregroundStyle(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    isActive ? habitColor.opacity(0.95) : .gray,
+                                    isActive ? habitColor.opacity(0.75) : .gray.opacity(0.7)
+                                ]),
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .opacity(isActive ? 1.0 : 0.5)
                 }
             }
         }
     }
 }
 
-// MARK: - Style 2: Bold Glassmorphic
+// MARK: - Style 2: Bold Glassmorphic (Enhanced)
 
-/// Modern glass effect with vibrant colors and depth
+/// Premium glass effect with rich internal gradients and luminous depth
 struct BoldGlassmorphicIconView: View {
     let iconName: String?
     let isActive: Bool
@@ -73,47 +145,101 @@ struct BoldGlassmorphicIconView: View {
     
     var body: some View {
         ZStack {
-            // Glass background with color tint
+            // Rich multi-layer radial gradient base
             Circle()
-                .fill(.ultraThinMaterial)
+                .fill(
+                    RadialGradient(
+                        gradient: Gradient(stops: [
+                            .init(color: habitColor.opacity(isActive ? 0.45 : 0.2), location: 0.0),
+                            .init(color: habitColor.opacity(isActive ? 0.35 : 0.15), location: 0.3),
+                            .init(color: habitColor.opacity(isActive ? 0.25 : 0.1), location: 0.6),
+                            .init(color: habitColor.opacity(isActive ? 0.15 : 0.05), location: 1.0)
+                        ]),
+                        center: .center,
+                        startRadius: 5,
+                        endRadius: 22
+                    )
+                )
                 .frame(width: 41, height: 41)
-                .background(
+                .overlay(
+                    // Top-left bright highlight
                     Circle()
                         .fill(
                             RadialGradient(
                                 gradient: Gradient(colors: [
-                                    habitColor.opacity(isActive ? 0.4 : 0.15),
-                                    habitColor.opacity(isActive ? 0.2 : 0.05)
+                                    Color.white.opacity(colorScheme == .dark ? 0.25 : 0.4),
+                                    Color.white.opacity(colorScheme == .dark ? 0.08 : 0.12),
+                                    Color.clear
                                 ]),
-                                center: .center,
-                                startRadius: 10,
-                                endRadius: 25
+                                center: UnitPoint(x: 0.25, y: 0.25),
+                                startRadius: 3,
+                                endRadius: 20
                             )
                         )
-                        .frame(width: 41, height: 41)
                 )
+                .overlay(
+                    // Bottom-right deeper color
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                gradient: Gradient(colors: [
+                                    Color.clear,
+                                    habitColor.opacity(isActive ? 0.3 : 0.12),
+                                    habitColor.opacity(isActive ? 0.4 : 0.18)
+                                ]),
+                                center: UnitPoint(x: 0.75, y: 0.75),
+                                startRadius: 5,
+                                endRadius: 22
+                            )
+                        )
+                )
+                // Angular shimmer border
                 .overlay(
                     Circle()
                         .strokeBorder(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color.white.opacity(colorScheme == .dark ? 0.3 : 0.5),
-                                    Color.white.opacity(colorScheme == .dark ? 0.1 : 0.2)
+                            AngularGradient(
+                                gradient: Gradient(stops: [
+                                    .init(color: Color.white.opacity(colorScheme == .dark ? 0.45 : 0.65), location: 0.0),
+                                    .init(color: habitColor.opacity(isActive ? 0.5 : 0.25), location: 0.2),
+                                    .init(color: Color.white.opacity(colorScheme == .dark ? 0.25 : 0.4), location: 0.4),
+                                    .init(color: habitColor.opacity(isActive ? 0.4 : 0.2), location: 0.6),
+                                    .init(color: Color.white.opacity(colorScheme == .dark ? 0.35 : 0.55), location: 0.8),
+                                    .init(color: Color.white.opacity(colorScheme == .dark ? 0.45 : 0.65), location: 1.0)
                                 ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                                center: .center,
+                                startAngle: .degrees(0),
+                                endAngle: .degrees(360)
                             ),
-                            lineWidth: 1.5
+                            lineWidth: 1.8
                         )
                 )
-                .shadow(color: habitColor.opacity(isActive ? 0.2 : 0.05), radius: 8, x: 0, y: 4)
+                // Inner luminous ring
+                .overlay(
+                    Circle()
+                        .strokeBorder(
+                            AngularGradient(
+                                gradient: Gradient(colors: [
+                                    habitColor.opacity(isActive ? 0.5 : 0.2),
+                                    habitColor.opacity(isActive ? 0.2 : 0.08),
+                                    habitColor.opacity(isActive ? 0.4 : 0.15),
+                                    habitColor.opacity(isActive ? 0.25 : 0.1)
+                                ]),
+                                center: .center,
+                                startAngle: .degrees(45),
+                                endAngle: .degrees(405)
+                            ),
+                            lineWidth: 1.0
+                        )
+                        .padding(2)
+                )
             
-            // Icon with white/light appearance
+            // Icon with sophisticated color treatment
             if let iconName = iconName, !iconName.isEmpty {
                 if iconName.count == 1 || (iconName.first?.isEmoji ?? false) {
                     Text(iconName)
                         .font(.system(size: 25))
-                        .saturation(isActive ? 1.0 : 0.0)
+                        .saturation(isActive ? 1.3 : 0.0)
+                        .brightness(isActive ? 0.1 : 0.0)
                         .opacity(isActive ? 1.0 : 0.6)
                 } else {
                     Image(systemName: iconName)
@@ -121,7 +247,19 @@ struct BoldGlassmorphicIconView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 22, height: 22)
-                        .foregroundColor(colorScheme == .dark ? .white : habitColor)
+                        .foregroundStyle(
+                            LinearGradient(
+                                gradient: Gradient(colors: colorScheme == .dark ? [
+                                    Color.white.opacity(0.95),
+                                    Color.white.opacity(0.8)
+                                ] : [
+                                    habitColor.opacity(isActive ? 1.0 : 0.6),
+                                    habitColor.opacity(isActive ? 0.75 : 0.45)
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                         .opacity(isActive ? 1.0 : 0.5)
                 }
             }
@@ -129,9 +267,9 @@ struct BoldGlassmorphicIconView: View {
     }
 }
 
-// MARK: - Style 3: Vibrant Solid
+// MARK: - Style 3: Vibrant Solid (Enhanced)
 
-/// Bold, colorful solid design with high contrast
+/// Bold, rich color design with sophisticated internal gradients and dimension
 struct VibrantSolidIconView: View {
     let iconName: String?
     let isActive: Bool
@@ -141,43 +279,106 @@ struct VibrantSolidIconView: View {
     
     var body: some View {
         ZStack {
-            // Solid colored background with gradient
+            // Rich angular gradient background
             Circle()
                 .fill(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            habitColor.opacity(isActive ? 1.0 : 0.3),
-                            habitColor.opacity(isActive ? 0.85 : 0.25)
+                    AngularGradient(
+                        gradient: Gradient(stops: [
+                            .init(color: habitColor.opacity(isActive ? 1.0 : 0.4), location: 0.0),
+                            .init(color: habitColor.opacity(isActive ? 0.85 : 0.35), location: 0.15),
+                            .init(color: habitColor.opacity(isActive ? 1.0 : 0.4), location: 0.35),
+                            .init(color: habitColor.opacity(isActive ? 0.9 : 0.37), location: 0.5),
+                            .init(color: habitColor.opacity(isActive ? 1.0 : 0.4), location: 0.65),
+                            .init(color: habitColor.opacity(isActive ? 0.88 : 0.36), location: 0.85),
+                            .init(color: habitColor.opacity(isActive ? 1.0 : 0.4), location: 1.0)
                         ]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+                        center: .center,
+                        startAngle: .degrees(0),
+                        endAngle: .degrees(360)
                     )
                 )
                 .frame(width: 41, height: 41)
-                .shadow(color: habitColor.opacity(isActive ? 0.3 : 0.1), radius: 6, x: 0, y: 3)
                 .overlay(
-                    // Inner glow effect
+                    // Luminous top-left highlight
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                gradient: Gradient(stops: [
+                                    .init(color: Color.white.opacity(isActive ? 0.35 : 0.2), location: 0.0),
+                                    .init(color: Color.white.opacity(isActive ? 0.15 : 0.08), location: 0.4),
+                                    .init(color: Color.clear, location: 0.7)
+                                ]),
+                                center: UnitPoint(x: 0.28, y: 0.28),
+                                startRadius: 2,
+                                endRadius: 18
+                            )
+                        )
+                )
+                .overlay(
+                    // Deeper shading on bottom-right
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                gradient: Gradient(stops: [
+                                    .init(color: Color.clear, location: 0.3),
+                                    .init(color: Color.black.opacity(isActive ? 0.15 : 0.08), location: 0.7),
+                                    .init(color: Color.black.opacity(isActive ? 0.2 : 0.12), location: 1.0)
+                                ]),
+                                center: UnitPoint(x: 0.72, y: 0.72),
+                                startRadius: 5,
+                                endRadius: 22
+                            )
+                        )
+                )
+                // Angular shimmer border
+                .overlay(
                     Circle()
                         .strokeBorder(
-                            LinearGradient(
+                            AngularGradient(
+                                gradient: Gradient(stops: [
+                                    .init(color: Color.white.opacity(0.7), location: 0.0),
+                                    .init(color: Color.white.opacity(0.25), location: 0.15),
+                                    .init(color: Color.white.opacity(0.5), location: 0.3),
+                                    .init(color: Color.white.opacity(0.15), location: 0.5),
+                                    .init(color: Color.white.opacity(0.6), location: 0.65),
+                                    .init(color: Color.white.opacity(0.2), location: 0.85),
+                                    .init(color: Color.white.opacity(0.7), location: 1.0)
+                                ]),
+                                center: .center,
+                                startAngle: .degrees(135),
+                                endAngle: .degrees(495)
+                            ),
+                            lineWidth: 1.2
+                        )
+                )
+                // Inner bright accent ring
+                .overlay(
+                    Circle()
+                        .strokeBorder(
+                            AngularGradient(
                                 gradient: Gradient(colors: [
                                     Color.white.opacity(0.4),
-                                    Color.white.opacity(0.0)
+                                    Color.white.opacity(0.1),
+                                    Color.white.opacity(0.3),
+                                    Color.white.opacity(0.05),
+                                    Color.white.opacity(0.35)
                                 ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                                center: .center,
+                                startAngle: .degrees(90),
+                                endAngle: .degrees(450)
                             ),
-                            lineWidth: 1
+                            lineWidth: 0.8
                         )
-                        .padding(2)
+                        .padding(2.5)
                 )
             
-            // White icon for maximum contrast
+            // Premium white icon with gradient
             if let iconName = iconName, !iconName.isEmpty {
                 if iconName.count == 1 || (iconName.first?.isEmoji ?? false) {
                     Text(iconName)
                         .font(.system(size: 25))
-                        .saturation(isActive ? 1.0 : 0.0)
+                        .saturation(isActive ? 1.25 : 0.0)
+                        .brightness(isActive ? 0.15 : 0.0)
                         .opacity(isActive ? 1.0 : 0.6)
                 } else {
                     Image(systemName: iconName)
@@ -185,7 +386,16 @@ struct VibrantSolidIconView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 22, height: 22)
-                        .foregroundColor(.white)
+                        .foregroundStyle(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.white.opacity(0.98),
+                                    Color.white.opacity(0.85)
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                         .opacity(isActive ? 1.0 : 0.7)
                 }
             }
@@ -284,9 +494,9 @@ struct HabitIconStyleTester_Previews: PreviewProvider {
                 // Style 1: Soft Minimal
                 VStack(spacing: 15) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Style 1: Soft Minimal")
+                        Text("Style 1: Soft Minimal (Enhanced)")
                             .font(.headline)
-                        Text("Clean background with colored border")
+                        Text("Sophisticated internal gradients with natural depth")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -343,9 +553,9 @@ struct HabitIconStyleTester_Previews: PreviewProvider {
                 // Style 2: Bold Glassmorphic
                 VStack(spacing: 15) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Style 2: Bold Glassmorphic")
+                        Text("Style 2: Bold Glassmorphic (Enhanced)")
                             .font(.headline)
-                        Text("Glass material with radial color glow")
+                        Text("Rich layered gradients with angular shimmer")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -402,9 +612,9 @@ struct HabitIconStyleTester_Previews: PreviewProvider {
                 // Style 3: Vibrant Solid
                 VStack(spacing: 15) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Style 3: Vibrant Solid")
+                        Text("Style 3: Vibrant Solid (Enhanced)")
                             .font(.headline)
-                        Text("Bold solid color with white icons")
+                        Text("Bold angular gradients with dimensional shading")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -629,9 +839,9 @@ struct HabitIconStyleTester_Previews: PreviewProvider {
                 // Style 1: Soft Minimal
                 VStack(spacing: 15) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Style 1: Soft Minimal")
+                        Text("Style 1: Soft Minimal (Enhanced)")
                             .font(.headline)
-                        Text("Clean background with colored border")
+                        Text("Luminous accents with sophisticated color infusion")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -688,9 +898,9 @@ struct HabitIconStyleTester_Previews: PreviewProvider {
                 // Style 2: Bold Glassmorphic
                 VStack(spacing: 15) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Style 2: Bold Glassmorphic")
+                        Text("Style 2: Bold Glassmorphic (Enhanced)")
                             .font(.headline)
-                        Text("Glass material with radial color glow")
+                        Text("Premium glass with angular shimmer and radiance")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -747,9 +957,9 @@ struct HabitIconStyleTester_Previews: PreviewProvider {
                 // Style 3: Vibrant Solid
                 VStack(spacing: 15) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Style 3: Vibrant Solid")
+                        Text("Style 3: Vibrant Solid (Enhanced)")
                             .font(.headline)
-                        Text("Bold solid color with white icons")
+                        Text("Rich angular gradients with multi-layer depth")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }

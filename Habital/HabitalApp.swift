@@ -3,13 +3,10 @@
 //  Habital
 //
 //  Created by Elias Osarumwense on 29.03.25.
-//
+
 
 import SwiftUI
-import CoreData
-
-import SwiftUI
-import CoreData
+@preconcurrency import CoreData
 
 @main
 struct HabitalApp: App {
@@ -28,6 +25,11 @@ struct HabitalApp: App {
     
     // NEW: Stats summary data manager for preloading summary calculations
     @StateObject private var statsSummaryManager = StatsSummaryDataManager()
+    
+    // 🔄 NEW: Create shared toggleManager instance
+    @StateObject private var toggleManager = HabitToggleManager(
+        context: PersistenceController.shared.container.viewContext
+    )
     
     // OPTIMIZATION: Progressive loading states
     @State private var basicDataReady = false
@@ -66,10 +68,11 @@ struct HabitalApp: App {
                 
                 ContentView()
                     .environment(\.managedObjectContext, persistenceController.container.viewContext)
-                    .environmentObject(cacheManager)
+                    //.environmentObject(cacheManager)
                     .environmentObject(sharedStatsDataManager)
                     .environmentObject(habitManager)
                     .environmentObject(statsSummaryManager)
+                    .environmentObject(toggleManager) // 🔄 Add toggleManager as environment object
                  
             }
         }

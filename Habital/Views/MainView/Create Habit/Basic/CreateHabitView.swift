@@ -73,7 +73,24 @@ struct CreateHabitView: View {
     @State private var showRepeatPatternSheet = false
     @State private var animateIcon = false
     
-    private let colors: [Color] = [.blue, .green, .orange, .red, .purple, .pink, .yellow, .primary]
+    private let colors: [Color] = [
+        .red,
+        .orange,
+        .yellow,
+        .green,
+        .mint,
+        .teal,
+        .cyan,
+        .blue,
+        .indigo,
+        .purple,
+        .pink,
+        .brown,
+        .gray,
+        .black,
+        .white
+    ]
+
     let onHabitCreated: (() -> Void)?
     
     // Tracking type selection
@@ -236,16 +253,17 @@ struct CreateHabitView: View {
                             // Core habit info (icon, name, description)
                             CreateHabitCoreSection(
                                 name: $name,
-                                habitDescription: $habitDescription,
+                                //habitDescription: $habitDescription,
                                 icon: $icon,
                                 selectedColor: $selectedColor,
                                 isTextFieldFocused: $isTextFieldFocused,
                                 colors: colors,
-                                isBadHabit: isBadHabit,
-                                selectedIntensity: selectedIntensity,
+                                isBadHabit: $isBadHabit,
+                                selectedIntensity: $selectedIntensity,
                                 showIconPicker: { showIconPicker = true },
-                                showWallpaperPicker: { showWallpaperSheet = true },  // ADD THIS
-                                hasWallpaper: habitWallpaper != nil  // ADD THIS
+                                showWallpaperPicker: { showWallpaperSheet = true },
+                                hasWallpaper: habitWallpaper != nil,
+                                hasExistingHabits: false  // Add the missing parameter
                             )
                             
                             // Schedule with next occurrence
@@ -813,6 +831,7 @@ struct CreateHabitView: View {
         newHabit.startDate = startDate
         newHabit.icon = icon
         newHabit.isBadHabit = isBadHabit
+        newHabit.isArchived = false  // Explicitly set to false so it shows up in the overview
         newHabit.intensityLevel = selectedIntensity.rawValue
         newHabit.category = selectedCategory
         if let selectedList = selectedHabitList {

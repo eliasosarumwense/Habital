@@ -66,7 +66,9 @@ struct HabitRowView: View {
     
     @ObservedObject var habit: Habit
     @Environment(\.managedObjectContext) private var viewContext
-    @StateObject private var toggleManager: HabitToggleManager
+    
+    // 🔄 Use shared toggleManager from environment
+    @EnvironmentObject var toggleManager: HabitToggleManager
     
     @State private var iconPressed = false
 
@@ -89,9 +91,6 @@ struct HabitRowView: View {
         self.editHabit = editHabit
         self.deleteHabit = deleteHabit
         self.date = date
-
-        let ctx = habit.managedObjectContext ?? PersistenceController.shared.container.viewContext
-        _toggleManager = StateObject(wrappedValue: HabitToggleManager(context: ctx))
     }
     // Extract the habit color or use a default
     private var habitColor: Color {
@@ -180,19 +179,16 @@ struct HabitRowView: View {
         return value
     }
     
-    // Get the repeat pattern text
+    // Get the repeat pattern text (without tracking info)
     private var repeatPatternText: String {
         guard let repeatPattern = HabitUtilities.getEffectiveRepeatPattern(for: habit, on: date) else { return "Not scheduled" }
-        
-        // Add repeats per day to the pattern text if > 1
-        let repeatsText = repeatPattern.repeatsPerDay > 1 ? " (\(repeatPattern.repeatsPerDay)x per day)" : ""
         
         // Check for daily goal
         if let dailyGoal = repeatPattern.dailyGoal {
             if dailyGoal.everyDay {
-                return "Daily" + repeatsText
+                return "Daily"
             } else if dailyGoal.daysInterval > 0 {
-                return "Every \(dailyGoal.daysInterval) days" + repeatsText
+                return "Every \(dailyGoal.daysInterval) days"
             } else if let specificDays = dailyGoal.specificDays as? [Bool] {
                 // Check if we have multiple weeks
                 let weekCount = specificDays.count / 7
@@ -222,9 +218,9 @@ struct HabitRowView: View {
                     if weekDescriptions.isEmpty {
                         return "No days selected"
                     } else if weekDescriptions.count == 1 {
-                        return weekDescriptions[0] + repeatsText
+                        return weekDescriptions[0]
                     } else {
-                        return "\(weekCount) weeks rotation" + repeatsText
+                        return "\(weekCount)-week rotation"
                     }
                 } else if specificDays.count == 7 {
                     // Single week pattern
@@ -234,19 +230,19 @@ struct HabitRowView: View {
                         .map { $0.0 }
                     
                     if selectedDays.isEmpty {
-                        return "No days selected" + repeatsText
+                        return "No days selected"
                     } else {
-                        return selectedDays.joined(separator: ", ") + repeatsText
+                        return selectedDays.joined(separator: ", ")
                     }
                 } else {
-                    return "Custom daily pattern" + repeatsText
+                    return "Custom pattern"
                 }
             }
         }
         
         // Check for weekly goal
         if let weeklyGoal = repeatPattern.weeklyGoal {
-            let baseText = weeklyGoal.everyWeek ? "Weekly" : "Every \(weeklyGoal.weekInterval) weeks"
+            let baseText = weeklyGoal.everyWeek ? "Every week" : "Every \(weeklyGoal.weekInterval) weeks"
             
             if let specificDays = weeklyGoal.specificDays as? [Bool], specificDays.count == 7 {
                 let dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -255,18 +251,18 @@ struct HabitRowView: View {
                     .map { $0.0 }
                 
                 if selectedDays.isEmpty {
-                    return "\(baseText): No days selected" + repeatsText
+                    return "\(baseText), no days selected"
                 } else {
-                    return "\(baseText): \(selectedDays.joined(separator: ", "))" + repeatsText
+                    return "\(baseText) on \(selectedDays.joined(separator: ", "))"
                 }
             }
             
-            return baseText + repeatsText
+            return baseText
         }
         
         // Check for monthly goal
         if let monthlyGoal = repeatPattern.monthlyGoal {
-            let baseText = monthlyGoal.everyMonth ? "Monthly" : "Every \(monthlyGoal.monthInterval) months"
+            let baseText = monthlyGoal.everyMonth ? "Every month" : "Every \(monthlyGoal.monthInterval) months"
             
             if let specificDays = monthlyGoal.specificDays as? [Bool], specificDays.count == 31 {
                 let selectedDays = (0..<specificDays.count)
@@ -274,18 +270,77 @@ struct HabitRowView: View {
                     .map { String($0 + 1) }
                 
                 if selectedDays.isEmpty {
-                    return "\(baseText): No days selected" + repeatsText
+                    return "\(baseText), no days selected"
                 } else if selectedDays.count <= 3 {
-                    return "\(baseText): \(selectedDays.joined(separator: ", "))" + repeatsText
+                    return "\(baseText) on day \(selectedDays.joined(separator: ", "))"
                 } else {
-                    return "\(baseText): \(selectedDays.count) days" + repeatsText
+                    return "\(baseText) on \(selectedDays.count) days"
                 }
             }
             
-            return baseText + repeatsText
+            return baseText
         }
         
         return "Not scheduled"
+    }
+    
+    // Get tracking info for display (repetitions, duration, or quantity)
+    private var trackingInfoText: String? {
+        guard let repeatPattern = HabitUtilities.getEffectiveRepeatPattern(for: habit, on: date) else { return nil }
+        
+        // Check tracking type
+        if let trackingTypeString = repeatPattern.trackingType {
+            switch trackingTypeString {
+            case "duration":
+                let duration = Int(repeatPattern.duration)
+                if duration > 0 {
+                    if duration >= 60 {
+                        let hours = duration / 60
+                        let minutes = duration % 60
+                        if minutes > 0 {
+                            let hourText = hours == 1 ? "hour" : "hours"
+                            let minuteText = minutes == 1 ? "minute" : "minutes"
+                            return "\(hours) \(hourText) \(minutes) \(minuteText)"
+                        } else {
+                            let hourText = hours == 1 ? "hour" : "hours"
+                            return "\(hours) \(hourText)"
+                        }
+                    } else {
+                        let minuteText = duration == 1 ? "minute" : "minutes"
+                        return "\(duration) \(minuteText)"
+                    }
+                }
+            case "quantity":
+                let quantity = Int(repeatPattern.targetQuantity)
+                if quantity > 0 {
+                    var unit = repeatPattern.quantityUnit ?? "items"
+                    
+                    // Handle pluralization
+                    if quantity == 1 {
+                        // Remove 's' from end if present
+                        if unit.hasSuffix("s") {
+                            unit = String(unit.dropLast())
+                        }
+                    } else {
+                        // Add 's' to end if not present
+                        if !unit.hasSuffix("s") {
+                            unit = unit + "s"
+                        }
+                    }
+                    
+                    return "\(quantity) \(unit)"
+                }
+            default: // "repetitions"
+                let repeats = Int(repeatPattern.repeatsPerDay)
+                if repeats == 1 {
+                    return "Once"
+                } else if repeats > 1 {
+                    return "\(repeats) times"
+                }
+            }
+        }
+        
+        return nil
     }
     
     private var habitIntensity: HabitIntensity {
@@ -329,6 +384,7 @@ struct HabitRowView: View {
                 self.completedRepeats = toggleManager.getCompletedRepeatsCount(for: habit, on: normalizedDate)
             }
         }
+        
     }
     
     // Add this method to complete with analytics:
@@ -574,10 +630,14 @@ struct HabitRowView: View {
     private func addQuickDuration(_ minutes: Int) {
         let currentMinutes = HabitUtilities.getDurationCompleted(for: habit, on: date)
         let newTotal = currentMinutes + minutes
-        toggleManager.toggleDurationCompletion(for: habit, on: date, minutes: newTotal)
+        toggleManager.toggleDurationCompletion(for: habit, on: date, minutes: newTotal, tracksTime: false)
+        HabitUtilities.clearHabitActivityCache()
         
         // Update local state if needed
         updateCompletedRepeats()
+        
+        // Trigger parent view update
+        toggleCompletion()
         
         // Haptic feedback
         let impact = UIImpactFeedbackGenerator(style: .light)
@@ -587,10 +647,14 @@ struct HabitRowView: View {
     private func addQuickQuantity(_ amount: Int) {
         let currentQuantity = HabitUtilities.getQuantityCompleted(for: habit, on: date)
         let newTotal = currentQuantity + amount
-        toggleManager.toggleQuantityCompletion(for: habit, on: date, quantity: newTotal)
+        toggleManager.toggleQuantityCompletion(for: habit, on: date, quantity: newTotal, tracksTime: false)
+        HabitUtilities.clearHabitActivityCache()
         
         // Update local state if needed
         updateCompletedRepeats()
+        
+        // Trigger parent view update
+        toggleCompletion()
         
         // Haptic feedback
         let impact = UIImpactFeedbackGenerator(style: .light)
@@ -826,7 +890,7 @@ struct HabitRowView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack (spacing: 4) {
                     Text(habit.name ?? "Unnamed Habit")
-                        .font(.custom("Lexend-Medium", size: 15))
+                        .font(.customFont("Lexend", .semiBold, 15))
                         .foregroundColor(isActive ? .primary : .gray)
                         .contentTransition(.interpolate)
                     
@@ -858,29 +922,34 @@ struct HabitRowView: View {
                 HStack(spacing: 4) {
                     // Add the repeat pattern text if setting is enabled
                     if showRepeatPattern {
-                        
-                        Text(repeatPatternText)
-                            .customFont("Lexend", .semiBold, 11)
-                            .foregroundColor(.secondary)
-                            .contentTransition(.interpolate)
-                        
-                        if isFollowupHabit {
-                            Image(systemName: "arrow.turn.down.right")
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    if shouldShowOverdue && showOverdueText, let days = overdueDays {
-                        HStack(spacing: 3) {
-                            // Dot separator
-                            Text("-")
-                                .font(.system(size: 10))
-                                .foregroundColor(.primary)
+                        HStack(spacing: 4) {
+                            Text(repeatPatternText)
+                                .customFont("Lexend", .semiBold, 11)
+                                .foregroundColor(.primary.opacity(0.6))
+                                .contentTransition(.interpolate)
                             
-                            Text("\(days)d overdue")
-                                .customFont("Lexend", .semiBold, 10)
-                                .foregroundColor(.red)
-                                .fontWeight(.medium)
+                            // Only show additional info for good habits
+                            if !habit.isBadHabit {
+                                if isFollowupHabit {
+                                    Text("↻")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(.primary.opacity(0.6))
+                                }
+                                
+                                // Add tracking info on the right if available
+                                if let trackingInfo = trackingInfoText {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 7, weight: .bold))
+                                            .foregroundColor(.secondary.opacity(0.6))
+                                        
+                                        Text(trackingInfo)
+                                            .customFont("Lexend", .semiBold, 10)
+                                            .foregroundColor(.secondary.opacity(0.8))
+                                            .contentTransition(.interpolate)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -905,28 +974,24 @@ struct HabitRowView: View {
             Spacer()
             
             if isActive {
-                HStack(spacing: 8) {
-                    VStack (alignment: .trailing, spacing: 5){
-                        /*
-                         if isInPast && (repeatsPerDay <= 1 ? !isCompleted : completedRepeats < repeatsPerDay) {
-                            Text(habit.isBadHabit ? "Avoided" : "Missed")
-                                .customFont("Lexend", .medium, 11)
-                                .foregroundColor(habit.isBadHabit ? .green : .secondary)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.primary.opacity(0.05))
-                                        .overlay(
-                                            Capsule()
-                                                .strokeBorder(
-                                                    Color.primary.opacity(0.1),
-                                                    lineWidth: 0.5
-                                                )
-                                        )
-                                )
+                HStack(spacing: 14) {
+                    // Show overdue badge if applicable
+                    if shouldShowOverdue && showOverdueText, let days = overdueDays {
+                        HStack(spacing: 5) {
+                            Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(.red)
+                            
+                            Text("\(days) \(days == 1 ? "day" : "days")")
+                                .customFont("Lexend", .semiBold, 10)
+                                .foregroundColor(.red)
                         }
-                         */
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(Color.red.opacity(0.15))
+                        )
                     }
                          
                     ZStack(alignment: .topTrailing) {
@@ -954,17 +1019,21 @@ struct HabitRowView: View {
                                             case .duration:
                                                 // Toggle between 0 and target duration
                                                 let newDuration = completedDuration >= targetDuration ? 0 : targetDuration
-                                                toggleManager.toggleDurationCompletion(for: habit, on: date, minutes: newDuration)
+                                                toggleManager.toggleDurationCompletion(for: habit, on: date, minutes: newDuration, tracksTime: false)
+                                                //HabitUtilities.clearHabitActivityCache()
                                                 updateCompletedRepeats()
+                                                toggleCompletion()
                                             case .quantity:
                                                 // Toggle between 0 and target quantity
                                                 let newQuantity = completedQuantity >= targetQuantity ? 0 : targetQuantity
-                                                toggleManager.toggleQuantityCompletion(for: habit, on: date, quantity: newQuantity)
+                                                toggleManager.toggleQuantityCompletion(for: habit, on: date, quantity: newQuantity, tracksTime: false)
+                                                //HabitUtilities.clearHabitActivityCache()
                                                 updateCompletedRepeats()
+                                                toggleCompletion()
                                             }
                                         }
                                     ),
-                                    onTap: { /* handled by binding */ },
+                                    onTap: {  },
                                     isInPast: isInPast,
                                     repeatsPerDay: repeatsPerDay,
                                     completedRepeats: completedRepeats,
@@ -991,7 +1060,7 @@ struct HabitRowView: View {
                                     quantityUnit: quantityUnit
                                 )
                                 .disabled(isFutureDate ? true : ((position2.width < 0) ? true : false))
-                                .scaleEffect(1.17)
+                                .scaleEffect(1.25)
                             } else {
                                 // Keep existing bad habit button
                                 BadHabitButton(
@@ -1030,63 +1099,7 @@ struct HabitRowView: View {
         .frame(height: 50)
         .padding(.vertical, 8)
         .padding(.horizontal)
-        /*
-         .background(
-         ZStack {
-         // Simulated soft shadow (dark mode aware)
-         RoundedRectangle(cornerRadius: 30)
-         .fill(
-         colorScheme == .dark
-         ? Color.black.opacity(0.4) // Darker in dark mode for contrast
-         : Color.black.opacity(0.15) // Softer in light mode
-         )
-         .blur(radius: 8)   // More blur = softer shadow
-         .offset(y: 4)       // Direction of shadow
-         .padding(-2)        // Prevent blur cutoff
-         
-         // Main background fill
-         RoundedRectangle(cornerRadius: 30)
-         .fill(
-         isActive
-         ? (colorScheme == .dark
-         ? Color(red: 0.11, green: 0.11, blue: 0.12)
-         : Color(red: 0.94, green: 0.94, blue: 0.96))
-         : (colorScheme == .dark
-         ? Color(red: 0.08, green: 0.08, blue: 0.09)
-         : Color(red: 0.90, green: 0.90, blue: 0.92))
-         )
-         
-         // Gradient border
-         RoundedRectangle(cornerRadius: 30)
-         .strokeBorder(
-         LinearGradient(
-         colors: [
-         habitColor.opacity(isActive ? (colorScheme == .dark ? 0.2 : 0.35) : 0.05),
-         Color.primary.opacity(colorScheme == .dark ? 0.05 : 0.1)
-         ],
-         startPoint: .leading,
-         endPoint: .trailing
-         ),
-         lineWidth: 1
-         )
-         
-         // Optional accent background
-         if customRowBackground && isActive {
-         RoundedRectangle(cornerRadius: 30)
-         .fill(habitColor.opacity(colorScheme == .dark ? 0.08 : 0.04))
-         }
-         
-         /*
-          // Optional overlay for past items
-          if isInPast {
-          RoundedRectangle(cornerRadius: 20)
-          .fill(Color.primary.opacity(0.05))
-          }
-          */
-         }
-         )
-         */
-        //.lightGlassBackground(cornerRadius: 30)
+
         .glassBackground(cornerRadius: 30)
         .contentShape(Rectangle()) 
         .offset(x: position2.width)
@@ -1110,18 +1123,7 @@ struct HabitRowView: View {
                     }
                 }
         )
-        //.animation(.easeInOut(duration: 0.3), value: isCompleted)
-        //.animation(.smooth(duration: 0.3), value: isActive)
-        //.animation(.smooth(duration: 0.3), value: isCompleted)
-        //.animation(.smooth(duration: 0.3), value: completedRepeats)
-        //.animation(.smooth(duration: 0.4), value: habit.name)
-        /*
-         .transition(.asymmetric(
-         insertion: .move(edge: .leading).combined(with: .opacity),
-         removal: .move(edge: .trailing).combined(with: .opacity)
-         ))
-         */
-        //.opacity(isInPast ? 0.9 : 1)
+
             
         .onTapGesture {
             if position2.width < 0 {
@@ -1141,11 +1143,9 @@ struct HabitRowView: View {
                 .presentationBackground(.ultraThinMaterial)
             
              */
-                .presentationDetents([.medium, .large], selection: $selectedDetent)
-                .presentationDetents([.fraction(0.85)])
-                
+                .presentationDetents([.fraction(0.87)])
                 .presentationCornerRadius(45)
-                //.interactiveDismissDisabled(false)
+                .interactiveDismissDisabled(false)
                 .presentationDragIndicator(.visible)
 
                         
@@ -1158,9 +1158,9 @@ struct HabitRowView: View {
                 currentStreak: streak,  // ← Pass the calculated streak from HabitRowView
                 isPresented: $showToggleSheet
             )
-            .presentationCornerRadius(45)
-            .presentationDetents([.medium], selection: .constant(.medium))
-            .presentationBackground(.ultraThinMaterial)
+            .presentationCornerRadius(55)
+            .presentationDetents([.fraction(0.54)])
+            
             .interactiveDismissDisabled(false)
         }
              

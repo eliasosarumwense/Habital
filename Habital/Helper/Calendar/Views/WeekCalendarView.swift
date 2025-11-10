@@ -10,6 +10,10 @@ struct WeekCalendarView: View {
     
     let getFilteredHabits: (Date) -> [Habit]
     let animateRings: Bool
+    let refreshTrigger: UUID // Add refresh trigger parameter
+    
+    // 🔄 Add toggleManager to observe completion changes
+    @ObservedObject var toggleManager: HabitToggleManager
 
     @Binding var title: String
     @Binding var focused: Week
@@ -19,7 +23,7 @@ struct WeekCalendarView: View {
     
     @State private var weeks: [Week]
     @State private var position: ScrollPosition
-    @State private var calendarWidth: CGFloat = .zero
+    @State private var calendarWidth: CGFloat = UIScreen.main.bounds.width
     @State private var isUpdatingFromWeekSwipe = false
     @State private var isUpdatingFromValidation = false // NEW: Prevent infinite loops
     
@@ -30,61 +34,76 @@ struct WeekCalendarView: View {
         selection: Binding<Date?>,
         focused: Binding<Week>,
         isDragging: Binding<Bool>,
+        toggleManager: HabitToggleManager,
         getFilteredHabits: @escaping (Date) -> [Habit] = { _ in [] },
         animateRings: Bool = false,
+        refreshTrigger: UUID = UUID(), // Add refresh trigger parameter
         habitColor: Color? = nil
     ) {
         _title = title
         _focused = focused
         _selection = selection
         _isDragging = isDragging
+        self.toggleManager = toggleManager
         self.getFilteredHabits = getFilteredHabits
         self.animateRings = animateRings
+        self.refreshTrigger = refreshTrigger // Store the refresh trigger
         self.habitColor = habitColor
         
-        let theNearestMonday = Calendar.nearestMonday(from: focused.wrappedValue.days.first ?? .now)
-        let currentWeek = Week(
-            days: Calendar.currentWeek(from: theNearestMonday),
-            order: .current
-        )
+        // Use the focused week provided by the parent as the source of truth
+        let currentWeek = focused.wrappedValue
         
-        let previousWeek: Week = if let firstDay = currentWeek.days.first {
-            Week(
+        // Ensure we always have valid weeks
+        let previousWeek: Week
+        if let firstDay = currentWeek.days.first {
+            previousWeek = Week(
                 days: Calendar.previousWeek(from: firstDay),
                 order: .previous
             )
-        } else { Week(days: [], order: .previous) }
+        } else {
+            // Fallback: create a week from a week ago
+            let referenceDate = selection.wrappedValue ?? Date()
+            let fallbackMonday = Calendar.nearestMonday(from: Calendar.current.date(byAdding: .weekOfYear, value: -1, to: referenceDate) ?? referenceDate)
+            previousWeek = Week(days: Calendar.currentWeek(from: fallbackMonday), order: .previous)
+        }
         
-        let nextWeek: Week = if let lastDay = currentWeek.days.last {
-            Week(
+        let nextWeek: Week
+        if let lastDay = currentWeek.days.last {
+            nextWeek = Week(
                 days: Calendar.nextWeek(from: lastDay),
                 order: .next
             )
-        } else { Week(days: [], order: .next) }
+        } else {
+            // Fallback: create a week from a week from now
+            let referenceDate = selection.wrappedValue ?? Date()
+            let fallbackMonday = Calendar.nearestMonday(from: Calendar.current.date(byAdding: .weekOfYear, value: 1, to: referenceDate) ?? referenceDate)
+            nextWeek = Week(days: Calendar.currentWeek(from: fallbackMonday), order: .next)
+        }
         
         _weeks = .init(initialValue: [previousWeek, currentWeek, nextWeek])
-        _position = State(initialValue: ScrollPosition(id: focused.id))
+        
+        // Set the initial position to match the current week provided by parent
+        _position = State(initialValue: ScrollPosition(id: currentWeek.id))
     }
     
     var body: some View {
         ScrollView(.horizontal) {
             LazyHStack(spacing: .zero) {
                 ForEach(weeks) { week in
-                    VStack {
-                        WeekView(
-                            week: week,
-                            selectedDate: $selection,
-                            dragProgress: .zero,
-                            getFilteredHabits: getFilteredHabits,
-                            animateRings: animateRings,
-                            isDragging: $isDragging,
-                            refreshTrigger: stableUUID(for: week),
-                            isShownInHabitDetails: nil,
-                            habitColor: habitColor
-                        )
-                        .frame(width: calendarWidth, height: Constants.dayHeight)
-                        .onAppear { loadWeek(from: week) }
-                    }
+                    WeekView(
+                        week: week,
+                        selectedDate: $selection,
+                        dragProgress: .zero,
+                        getFilteredHabits: getFilteredHabits,
+                        animateRings: animateRings,
+                        isDragging: $isDragging,
+                        toggleManager: toggleManager,
+                        refreshTrigger: refreshTrigger, // Pass the refresh trigger
+                        isShownInHabitDetails: nil,
+                        habitColor: habitColor
+                    )
+                    .frame(width: calendarWidth, height: Constants.dayHeight)
+                    .onAppear { loadWeek(from: week) }
                 }
             }
             .scrollTargetLayout()
@@ -262,15 +281,6 @@ struct WeekCalendarView: View {
             }
         }
 
-    }
-    
-    private func stableUUID(for week: Week) -> UUID {
-        // Create a consistent UUID based on the week's first day
-        let firstDay = week.days.first ?? Date()
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.year, .weekOfYear], from: firstDay)
-        let seedString = "\(components.year ?? 0)-\(components.weekOfYear ?? 0)"
-        return UUID(uuidString: seedString.padding(toLength: 36, withPad: "0", startingAt: 0)) ?? UUID()
     }
     
     func refreshWeeksForNewConstraints() {

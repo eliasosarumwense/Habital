@@ -102,6 +102,18 @@ struct RingFillCheckmarkButton: View {
         }
     }
     
+    private var centerDisplayUnit: String? {
+        switch trackingType {
+        case .quantity:
+            if completedQuantity < targetQuantity {
+                return quantityUnit
+            }
+        default:
+            return nil
+        }
+        return nil
+    }
+    
     private var bottomRightBadge: String? {
         switch trackingType {
         case .repetitions:
@@ -110,7 +122,7 @@ struct RingFillCheckmarkButton: View {
             }
         case .duration:
             if checkmarkOpacity > 0.5 {
-                return formatDuration(completedDuration)
+                return formatDurationWithUnit(completedDuration)
             }
         case .quantity:
             if checkmarkOpacity > 0.5 {
@@ -121,6 +133,10 @@ struct RingFillCheckmarkButton: View {
     }
     
     private func formatDuration(_ minutes: Int) -> String {
+        return "\(minutes)"
+    }
+    
+    private func formatDurationWithUnit(_ minutes: Int) -> String {
         if minutes < 60 {
             return "\(minutes)m"
         } else {
@@ -182,7 +198,7 @@ struct RingFillCheckmarkButton: View {
             }
         }) {
             ZStack {
-                // Empty circle border - always visible but lighter
+                // Empty circle border - always solid
                 Circle()
                     .strokeBorder(
                         isSkipped ? skipColor.opacity(0.40) : Color.gray.opacity(0.3),
@@ -198,7 +214,7 @@ struct RingFillCheckmarkButton: View {
                         style: StrokeStyle(
                             lineWidth: 3,
                             lineCap: .round,
-                            lineJoin: .round
+                            lineJoin: .miter
                         )
                     )
                     .frame(width: 32, height: 32)
@@ -255,10 +271,69 @@ struct RingFillCheckmarkButton: View {
                 } else {
                     // Center display for incomplete states
                     if !hideText && !centerDisplay.isEmpty && checkmarkOpacity < 0.5 {
-                        Text(centerDisplay)
-                            .font(.system(size: trackingType == .duration ? 8 : 10, weight: .bold))
-                            .foregroundColor(checkmarkColor)
+                        if trackingType == .quantity && completedQuantity < targetQuantity {
+                            // For quantity: use clean slash format like multi-repetitions
+                            HStack(spacing: 0) {
+                                Text("\(completedQuantity)")
+                                    .font(.customFont("Lexend", .semibold, 10))
+                                    .foregroundColor(checkmarkColor)
+                                Text("/")
+                                    .font(.customFont("Lexend", .semibold, 8.5))
+                                    .foregroundColor(checkmarkColor.opacity(0.7))
+                                    .offset(y: 0.5)
+                                Text("\(targetQuantity)")
+                                    .font(.customFont("Lexend", .semibold, 8.5))
+                                    .foregroundColor(checkmarkColor.opacity(0.7))
+                                    .offset(y: 0.5)
+                            }
                             .opacity(checkmarkOpacity < 0.5 ? 1.0 : 0.0)
+                        } else if trackingType == .duration && completedDuration < targetDuration {
+                            // For duration: use clean slash format like multi-repetitions
+                            HStack(spacing: 0) {
+                                Text("\(completedDuration)")
+                                    .font(.customFont("Lexend", .semibold, 10))
+                                    .foregroundColor(checkmarkColor)
+                                Text("/")
+                                    .font(.customFont("Lexend", .semibold, 8.5))
+                                    .foregroundColor(checkmarkColor.opacity(0.7))
+                                    .offset(y: 0.5)
+                                Text("\(targetDuration)")
+                                    .font(.customFont("Lexend", .semibold, 8.5))
+                                    .foregroundColor(checkmarkColor.opacity(0.7))
+                                    .offset(y: 0.5)
+                            }
+                            .opacity(checkmarkOpacity < 0.5 ? 1.0 : 0.0)
+                        } else if trackingType == .repetitions && repeatsPerDay > 1 {
+                            // For multi-repetitions: styled text with smaller slash and denominator
+                            let parts = centerDisplay.split(separator: "/")
+                            if parts.count == 2 {
+                                HStack(spacing: 0) {
+                                    Text(String(parts[0]))
+                                        .font(.customFont("Lexend", .semibold, 10))
+                                        .foregroundColor(checkmarkColor)
+                                    Text("/")
+                                        .font(.customFont("Lexend", .semibold, 8.5))
+                                        .foregroundColor(checkmarkColor.opacity(0.7))
+                                        .offset(y: 0.5)
+                                    Text(String(parts[1]))
+                                        .font(.customFont("Lexend", .semibold, 8.5))
+                                        .foregroundColor(checkmarkColor.opacity(0.7))
+                                        .offset(y: 0.5)
+                                }
+                                .opacity(checkmarkOpacity < 0.5 ? 1.0 : 0.0)
+                            } else {
+                                Text(centerDisplay)
+                                    .font(.customFont("Lexend", .semibold, 10))
+                                    .foregroundColor(checkmarkColor)
+                                    .opacity(checkmarkOpacity < 0.5 ? 1.0 : 0.0)
+                            }
+                        } else {
+                            // For other types: single line
+                            Text(centerDisplay)
+                                .font(.customFont("Lexend", .bold, 10))
+                                .foregroundColor(checkmarkColor)
+                                .opacity(checkmarkOpacity < 0.5 ? 1.0 : 0.0)
+                        }
                     }
                     
                     // Drawing checkmark (only when fully completed)
@@ -277,11 +352,13 @@ struct RingFillCheckmarkButton: View {
                     
                     if !hideText, let badge = bottomRightBadge {
                         Text(badge)
-                            .font(.system(size: trackingType == .duration ? 8 : 10, weight: .bold))
-                            .foregroundColor(checkmarkColor)
-                            .frame(width: trackingType == .duration ? 20 : 15, height: 15)
-                            .background(Circle()
-                                .fill(.ultraThinMaterial))
+                            .font(.customFont("Lexend", .bold, trackingType == .duration ? 7 : 9))
+                            .foregroundColor(checkmarkColor.opacity(0.95))
+                            .background(
+                                Circle()
+                                    .fill(.ultraThinMaterial)
+                                    .frame(width: trackingType == .duration ? 14 : 12, height: trackingType == .duration ? 14 : 12)
+                            )
                             .offset(x: 10, y: 10)
                             .transition(.scale.combined(with: .opacity))
                     }
@@ -430,7 +507,7 @@ struct RingFillCheckmarkButton: View {
         
         if !oldValue && newValue {
             // Entering skip state
-            if isRealStateChange {
+            if isRealStateChange && isUserInitiatedChange {
                 HapticsManager.shared.playRegretSkip()
             }
             
@@ -449,7 +526,7 @@ struct RingFillCheckmarkButton: View {
             
         } else if oldValue && !newValue {
             // Exiting skip state
-            if isRealStateChange {
+            if isRealStateChange && isUserInitiatedChange {
                 let generator = UIImpactFeedbackGenerator(style: .light)
                 generator.impactOccurred()
             }
@@ -480,7 +557,8 @@ struct RingFillCheckmarkButton: View {
     
     
     private func handleRepetitionChange(from oldValue: Int, to newValue: Int) {
-        let shouldPlayHaptics = hasInitialized && (oldValue != newValue) && isUserInitiatedChange && oldValue < repeatsPerDay && newValue >= repeatsPerDay
+        let shouldPlayFullHaptics = hasInitialized && (oldValue != newValue) && isUserInitiatedChange && oldValue < repeatsPerDay && newValue >= repeatsPerDay
+        let shouldPlayPartialHaptics = hasInitialized && (oldValue != newValue) && isUserInitiatedChange && newValue < repeatsPerDay
         
         if repeatsPerDay > 1 {
             withAnimation(Animation.easeInOut(duration: 0.3)) {
@@ -488,7 +566,7 @@ struct RingFillCheckmarkButton: View {
             }
             
             if newValue >= repeatsPerDay {
-                if shouldPlayHaptics {
+                if shouldPlayFullHaptics {
                     HapticsManager.shared.playDopamineSuccess()
                 }
                 
@@ -500,6 +578,12 @@ struct RingFillCheckmarkButton: View {
                     checkmarkTrim = 1
                 }
             } else {
+                // Play small haptic for individual repetition (not fully completed)
+                if shouldPlayPartialHaptics {
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.impactOccurred()
+                }
+                
                 withAnimation(.easeIn(duration: 0.2)) {
                     checkmarkTrim = 0
                     checkmarkOpacity = 0
@@ -544,14 +628,15 @@ struct RingFillCheckmarkButton: View {
     }
     
     private func handleQuantityChange(from oldValue: Int, to newValue: Int) {
-        let shouldPlayHaptics = hasInitialized && (oldValue != newValue) && isUserInitiatedChange && oldValue < targetQuantity && newValue >= targetQuantity
+        let shouldPlayFullHaptics = hasInitialized && (oldValue != newValue) && isUserInitiatedChange && oldValue < targetQuantity && newValue >= targetQuantity
+        let shouldPlayPartialHaptics = hasInitialized && (oldValue != newValue) && isUserInitiatedChange && newValue < targetQuantity
         
         withAnimation(Animation.easeInOut(duration: 0.3)) {
             ringFillTrim = completionProgress
         }
         
         if newValue >= targetQuantity {
-            if shouldPlayHaptics {
+            if shouldPlayFullHaptics {
                 HapticsManager.shared.playDopamineSuccess()
             }
             
@@ -563,6 +648,12 @@ struct RingFillCheckmarkButton: View {
                 checkmarkTrim = 1
             }
         } else {
+            // Play small haptic for quantity progress (not fully completed)
+            if shouldPlayPartialHaptics {
+                let generator = UIImpactFeedbackGenerator(style: .light)
+                generator.impactOccurred()
+            }
+            
             withAnimation(.easeIn(duration: 0.2)) {
                 checkmarkTrim = 0
                 checkmarkOpacity = 0

@@ -232,6 +232,10 @@ struct UltraMinimalRepeatPatternView: View {
     }
     
     // Get the repeat pattern text (shortened for minimal view)
+    var shortPatternTextForUse: String {
+        return shortPatternText
+    }
+    
     private var shortPatternText: String {
         guard let repeatPattern = HabitUtilities.getEffectiveRepeatPattern(for: habit, on: date) else {
             return "Not scheduled"

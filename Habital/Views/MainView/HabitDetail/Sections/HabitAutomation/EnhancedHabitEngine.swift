@@ -7,7 +7,7 @@
 
 import Foundation
 import CoreData
-
+/*
 // MARK: - Enhanced Configuration with Personalization
 struct EnhancedHabitAutomationConfig {
     var timeZone: TimeZone = .current
@@ -602,3 +602,4 @@ class EnhancedHabitAutomationEngine {
     // MARK: - Continue implementation...
     // This is part 1 of the implementation. The file is getting long, so I'll continue with the helper methods.
 }
+*/

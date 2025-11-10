@@ -11,6 +11,7 @@ import CoreData
 
 struct HabitGitHubGrid: View {
     let habit: Habit
+    let showHeader: Bool
     @State private var completionData: [[DayData]] = []
     @State private var animate: Bool = false
     @State private var totalDays: Int = 0
@@ -22,6 +23,12 @@ struct HabitGitHubGrid: View {
     
     private let daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     private let dayLabels = ["", "Tue", "", "Thu", "", "Sat", ""]
+    
+    // Convenience initializer with default showHeader = true
+    init(habit: Habit, showHeader: Bool = true) {
+        self.habit = habit
+        self.showHeader = showHeader
+    }
     
     // MARK: - Models
     struct DayData: Identifiable {
@@ -75,16 +82,17 @@ struct HabitGitHubGrid: View {
             return Color.clear
         }
         
+        // If before habit start date, show very light gray
         if day.date < (habit.startDate ?? Date()) {
-            return Color.clear
+            return Color.gray.opacity(0.08)
         }
         
         if !day.isActive {
             return Color.gray.opacity(0.08)
         }
         
-        // Choose base color: opposite color for best streak, habit color otherwise
-        let baseColor: Color = day.isInBestStreak ? oppositeColor(for: habitColor) : habitColor
+        // Use habit color for all squares (no different color for best streak)
+        let baseColor: Color = habitColor
         
         // Use completion ratio for varying opacity
         if day.completionRatio > 0 {
@@ -96,6 +104,35 @@ struct HabitGitHubGrid: View {
         } else {
             return Color.gray.opacity(0.25)
         }
+    }
+    
+    private func getLoadingMonthText(for weekIndex: Int) -> String {
+        let calendar = Calendar.current
+        let today = Date()
+        
+        let todayWeekday = calendar.component(.weekday, from: today)
+        let daysFromMonday = (todayWeekday == 1) ? 6 : todayWeekday - 2
+        let mondayOfCurrentWeek = calendar.date(byAdding: .day, value: -daysFromMonday, to: today) ?? today
+        
+        // Calculate the start date for the grid (52 weeks back from current week)
+        let gridStartWeek = calendar.date(byAdding: .weekOfYear, value: -(52 - 1), to: mondayOfCurrentWeek) ?? mondayOfCurrentWeek
+        let gridStartMonday = calendar.startOfDay(for: gridStartWeek)
+        
+        guard let weekStartDate = calendar.date(byAdding: .day, value: weekIndex * 7, to: gridStartMonday) else { return "" }
+        
+        // Check if this week contains the first day of a month
+        for dayOffset in 0..<7 {
+            guard let date = calendar.date(byAdding: .day, value: dayOffset, to: weekStartDate) else { continue }
+            let dayOfMonth = calendar.component(.day, from: date)
+            
+            if dayOfMonth == 1 {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MMM"
+                return formatter.string(from: date)
+            }
+        }
+        
+        return ""
     }
     
     private func getWeekStartDate(weekIndex: Int) -> Date {
@@ -115,12 +152,9 @@ struct HabitGitHubGrid: View {
         guard weekIndex < completionData.count else { return "" }
         guard let firstDayData = completionData[weekIndex].first else { return "" }
         
-        if firstDayData.date == Date.distantPast {
-            return ""
-        }
-        
+        // Check for first day of month first - this takes priority
         for dayData in completionData[weekIndex] {
-            if dayData.date == Date.distantPast || dayData.isFuture {
+            if dayData.isFuture {
                 continue
             }
             
@@ -133,15 +167,43 @@ struct HabitGitHubGrid: View {
             }
         }
         
+        // Check if we've already shown this month in a previous week
         if let habitStart = habit.startDate {
+            let habitStartMonth = calendar.component(.month, from: habitStart)
+            let habitStartYear = calendar.component(.year, from: habitStart)
+            
+            // Look for any previous week that already displayed this month
+            for prevWeekIndex in 0..<weekIndex {
+                if prevWeekIndex < completionData.count {
+                    for dayData in completionData[prevWeekIndex] {
+                        if !dayData.isFuture {
+                            let dayMonth = calendar.component(.month, from: dayData.date)
+                            let dayYear = calendar.component(.year, from: dayData.date)
+                            let dayOfMonth = calendar.component(.day, from: dayData.date)
+                            
+                            // If we found a first-of-month in a previous week for the same month/year as habit start
+                            if dayOfMonth == 1 && dayMonth == habitStartMonth && dayYear == habitStartYear {
+                                return "" // Don't show duplicate month
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Only show habit start month if it's the first time we're showing this month
             let habitStartWeek = getWeekStartForDate(habitStart)
-            let firstRealDay = completionData[weekIndex].first(where: { $0.date != Date.distantPast })?.date
+            let firstRealDay = completionData[weekIndex].first(where: { !$0.isFuture })?.date
             
             if let firstRealDay = firstRealDay,
                calendar.isDate(firstRealDay, equalTo: habitStartWeek, toGranularity: .weekOfYear) {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "MMM"
-                return formatter.string(from: habitStart)
+                
+                // Only show if habit doesn't start on the 1st of the month
+                let habitStartDay = calendar.component(.day, from: habitStart)
+                if habitStartDay != 1 {
+                    let formatter = DateFormatter()
+                    formatter.dateFormat = "MMM"
+                    return formatter.string(from: habitStart)
+                }
             }
         }
         
@@ -156,57 +218,75 @@ struct HabitGitHubGrid: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            // Header
-            /*
-            HStack {
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 7){
-                        Text(habit.name ?? "Habit")
-                            .font(.customFont("Lexend", .bold, 16))
-                        if let startDate = habit.startDate {
-                            HStack(spacing: 2) {
-                                Image(systemName: "calendar")
-                                    .font(.system(size: 6))
-                                    .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            // Header - conditionally shown
+            if showHeader {
+                HStack(spacing: 2) {
+                    // Habit icon on the left
+                    HabitIconView(
+                        iconName: habit.icon,
+                        isActive: true,
+                        habitColor: habitColor,
+                        streak: getCurrentStreak(),
+                        showStreaks: true, // Don't show streak badge in grid header
+                        useModernBadges: true,
+                        isFutureDate: false,
+                        isBadHabit: habit.isBadHabit,
+                        intensityLevel: getHabitIntensity()
+                    )
+                    .scaleEffect(0.65)
+                    //.frame(width: 32, height: 32) // Small size to match VStack height
+                    
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 7){
+                            Text(habit.name ?? "Habit")
+                                .font(.customFont("Lexend", .bold, 16))
+                            if let startDate = habit.startDate {
+                                HStack(spacing: 2) {
+                                    Image(systemName: "calendar")
+                                        .font(.system(size: 6))
+                                        .foregroundColor(.secondary)
 
-                                Text(formatStartDate(startDate))
-                                    .font(.customFont("Lexend", .regular, 10))
-                                    .foregroundColor(.secondary)
+                                    Text(formatStartDate(startDate))
+                                        .font(.customFont("Lexend", .regular, 10))
+                                        .foregroundColor(.secondary)
+                                }
                             }
-                        }
 
+                        }
+                        Text(completionText)
+                            .font(.customFont("Lexend", .regular, 10))
+                            .foregroundColor(.secondary)
                     }
-                    Text(completionText)
-                        .font(.customFont("Lexend", .regular, 11))
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                // Small consistency circle
-                ZStack {
-                    Circle()
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 3)
                     
-                    Circle()
-                        .trim(from: 0, to: completionPercentage)
-                        .stroke(
-                            habitColor,
-                            style: StrokeStyle(lineWidth: 3, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
+                    Spacer()
                     
-                    Text("\(Int(completionPercentage * 100))%")
-                        .font(.customFont("Lexend", .semiBold, 10))
-                        .foregroundColor(.primary)
+                    // Small consistency circle
+                    ZStack {
+                        Circle()
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 3)
+                        
+                        Circle()
+                            .trim(from: 0, to: completionPercentage)
+                            .stroke(
+                                habitColor,
+                                style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                            )
+                            .rotationEffect(.degrees(-90))
+                        
+                        Text("\(Int(completionPercentage * 100))%")
+                            .font(.customFont("Lexend", .semiBold, 10))
+                            .foregroundColor(.primary)
+                    }
+                    .frame(width: 30, height: 30)
                 }
-                .frame(width: 30, height: 30)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 2)
             }
-            */
+            
             // Grid with day labels
             if isLoading {
-                // Loading placeholder
+                // Loading placeholder - match exact structure and spacing
                 HStack(spacing: 2) {
                     VStack(spacing: 2) {
                         Color.clear
@@ -219,35 +299,50 @@ struct HabitGitHubGrid: View {
                                 .frame(width: 25, height: 12, alignment: .trailing)
                         }
                     }
+                    .padding(.trailing, 3)
                     
-                    VStack(spacing: 2) {
-                        HStack(spacing: 2) {
-                            ForEach(0..<21, id: \.self) { _ in
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(Color.gray.opacity(0.1))
-                                    .frame(width: 12, height: 8)
-                            }
-                        }
-                        
-                        ForEach(0..<7, id: \.self) { _ in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        VStack(spacing: 2) {
+                            // Header row - match exact height with month placeholders
                             HStack(spacing: 2) {
-                                ForEach(0..<21, id: \.self) { _ in
-                                    RoundedRectangle(cornerRadius: 3)
-                                        .fill(Color.gray.opacity(0.1))
-                                        .frame(width: 12, height: 12)
+                                ForEach(0..<52, id: \.self) { weekIndex in
+                                    // Show month placeholders during loading
+                                    Text(getLoadingMonthText(for: weekIndex))
+                                        .font(.customFont("Lexend", .medium, 6.5))
+                                        .foregroundColor(.secondary.opacity(0.3))
+                                        .frame(width: 12, height: 12, alignment: .center)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                }
+                            }
+                            
+                            // Data rows - match exact structure
+                            ForEach(0..<7, id: \.self) { _ in
+                                HStack(spacing: 2) {
+                                    ForEach(0..<52, id: \.self) { _ in
+                                        RoundedRectangle(cornerRadius: 5)
+                                            .fill(Color.gray.opacity(0.1))
+                                            .frame(width: 12, height: 12)
+                                    }
                                 }
                             }
                         }
+                        .padding(.vertical, 6)
+                        .padding(.leading, 2)
+                        .padding(.trailing, 6)
                     }
-                    //.padding(6)
+                    .defaultScrollAnchor(.trailing)
                 }
+                .offset(x: -5)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 5)
             } else {
                 HStack(spacing: 2) {
                     VStack(spacing: 2) {
-                        /*
+                        
                         Color.clear
                             .frame(width: 25, height: 12)
-                        */
+                        
                         ForEach(0..<7, id: \.self) { dayIndex in
                             Text(dayLabels[dayIndex])
                                 .font(.customFont("Lexend", .regular, 9))
@@ -262,11 +357,11 @@ struct HabitGitHubGrid: View {
                             HStack(spacing: 2) {
                                 ForEach(0..<totalWeeksFromStart, id: \.self) { weekIndex in
                                     Text(getWeekHeaderText(for: weekIndex))
-                                        .font(.customFont("Lexend", .medium, 9))
+                                        .font(.customFont("Lexend", .medium, 6.5))
                                         .foregroundColor(.secondary)
                                         .frame(width: 12, height: 12, alignment: .center)
                                         .lineLimit(1)
-                                        .minimumScaleFactor(0.5)
+                                        .truncationMode(.tail)
                                 }
                             }
                             
@@ -289,62 +384,65 @@ struct HabitGitHubGrid: View {
                                                     .frame(width: 12, height: 12)
                                             }
                                         } else {
-                                            Color.clear
+                                            // Show inactive square for missing data
+                                            RoundedRectangle(cornerRadius: 5)
+                                                .fill(Color.gray.opacity(0.08))
                                                 .frame(width: 12, height: 12)
                                         }
                                     }
                                 }
                             }
                         }
-                        .padding(6)
+                        .padding(.vertical, 6)
+                        .padding(.leading, 2)
+                        .padding(.trailing, 6)
                     }
                     .defaultScrollAnchor(.trailing)
                 }
+                .offset(x: -5)
                 .frame(maxWidth: .infinity)
-                .padding(.bottom, 8)
+                .padding(.bottom, 5)
             }
             
-            // Legend
-            HStack(spacing: 10) {
-                /*
-                if let startDate = habit.startDate {
-                    Text("Since \(formatStartDate(startDate))")
-                        .font(.customFont("Lexend", .regular, 10))
-                        .foregroundColor(.secondary)
-                }
-                 */
-                
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(oppositeColor(for: habitColor))
-                        .frame(width: 10, height: 10)
+            // Legend - only show when header is hidden
+            if !showHeader {
+                HStack(spacing: 10) {
+                    // Best Streak indicator
+                    HStack(spacing: 4) {
+                        Text("Best Streak")
+                            .font(.customFont("Lexend", .regular, 11))
+                            .foregroundColor(.secondary)
                         
-                    Text("Best Streak")
-                        .font(.customFont("Lexend", .regular, 11))
-                        .foregroundColor(.secondary)
-                
-                Spacer()
-                
-                Text("Less")
-                    .font(.customFont("Lexend", .regular, 11))
-                    .foregroundColor(.secondary)
-                
-                HStack(spacing: 2) {
-                    ForEach(0..<5) { index in
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(getLegendColor(for: index))
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(habitColor)
                             .frame(width: 10, height: 10)
                     }
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 4) {
+                        Text("Less")
+                            .font(.customFont("Lexend", .regular, 11))
+                            .foregroundColor(.secondary)
+                        
+                        HStack(spacing: 2) {
+                            ForEach(0..<5) { index in
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(getLegendColor(for: index))
+                                    .frame(width: 10, height: 10)
+                            }
+                        }
+                        
+                        Text("More")
+                            .font(.customFont("Lexend", .regular, 11))
+                            .foregroundColor(.secondary)
+                    }
                 }
-                
-                Text("More")
-                    .font(.customFont("Lexend", .regular, 11))
-                    .foregroundColor(.secondary)
-                
-                
+                .padding(.horizontal, 10)
             }
         }
-        .padding()
-        .glassBackground()
+        .padding(showHeader == true ? 7 : 10)
+        .sheetGlassBackground()
         .frame(maxWidth: .infinity)
         .onAppear {
             loadTrackingType()
@@ -420,22 +518,15 @@ struct HabitGitHubGrid: View {
         let daysFromMonday = (todayWeekday == 1) ? 6 : todayWeekday - 2
         let mondayOfCurrentWeek = calendar.date(byAdding: .day, value: -daysFromMonday, to: today) ?? today
         
+        // Always show a fixed number of weeks (like GitHub's 53 weeks)
+        let totalWeeksToShow = 52 // Show a full year worth of squares
+        
+        // Calculate the start date for the grid (52 weeks back from current week)
+        let gridStartWeek = calendar.date(byAdding: .weekOfYear, value: -(totalWeeksToShow - 1), to: mondayOfCurrentWeek) ?? mondayOfCurrentWeek
+        let gridStartMonday = calendar.startOfDay(for: gridStartWeek)
+        
         let habitStartDate = habit.startDate ?? today
         let habitStartDateNormalized = calendar.startOfDay(for: habitStartDate)
-        let habitStartWeekday = calendar.component(.weekday, from: habitStartDate)
-        let daysFromMondayStart = (habitStartWeekday == 1) ? 6 : habitStartWeekday - 2
-        let mondayOfStartWeek = calendar.date(byAdding: .day, value: -daysFromMondayStart, to: habitStartDate) ?? habitStartDate
-        
-        let currentWeekMonday = calendar.startOfDay(for: mondayOfCurrentWeek)
-        let startWeekMonday = calendar.startOfDay(for: mondayOfStartWeek)
-        
-        let daysBetweenRaw = calendar.dateComponents([.day], from: startWeekMonday, to: currentWeekMonday).day ?? 0
-        let daysBetween = max(0, daysBetweenRaw)
-        let weeksBetween = daysBetween / 7
-        
-        let actualTotalWeeks = weeksBetween + 1
-        let minWeeks = 21
-        let finalTotalWeeks = max(minWeeks, actualTotalWeeks)
         
         var tempData: [[DayData]] = []
         var activeDaysCount = 0
@@ -451,8 +542,8 @@ struct HabitGitHubGrid: View {
         // Pre-fetch all completion data
         let completions = (habit.completion as? Set<Completion>) ?? []
         
-        for weekIndex in 0..<actualTotalWeeks {
-            guard let weekStartDate = calendar.date(byAdding: .day, value: weekIndex * 7, to: startWeekMonday) else { continue }
+        for weekIndex in 0..<totalWeeksToShow {
+            guard let weekStartDate = calendar.date(byAdding: .day, value: weekIndex * 7, to: gridStartMonday) else { continue }
             
             var weekData: [DayData] = []
             
@@ -461,6 +552,7 @@ struct HabitGitHubGrid: View {
                 let dateStart = calendar.startOfDay(for: date)
                 
                 if dateStart < habitStartDateNormalized {
+                    // Before habit start date - show as inactive but visible
                     weekData.append(DayData(
                         date: date,
                         isActive: false,
@@ -541,29 +633,7 @@ struct HabitGitHubGrid: View {
             tempData.append(weekData)
         }
         
-        // Pad with minimum weeks if needed
-        while tempData.count < minWeeks {
-            let emptyWeek = (0..<7).map { _ in
-                DayData(
-                    date: Date.distantPast,
-                    isActive: false,
-                    isCompleted: false,
-                    completionRatio: 0.0,
-                    completionCount: 0,
-                    requiredCount: 0,
-                    isFuture: false,
-                    isToday: false,
-                    trackingType: habitTrackingType,
-                    durationCompleted: 0,
-                    durationTarget: targetDuration,
-                    quantityCompleted: 0,
-                    quantityTarget: targetQuantity,
-                    quantityUnit: quantityUnit,
-                    isInBestStreak: false
-                )
-            }
-            tempData.insert(emptyWeek, at: 0)
-        }
+        // No need to pad with minimum weeks anymore since we always show exactly totalWeeksToShow weeks
         
         // Compute best (longest) streak based on active+completed consecutive days
         let bestStreakDates = computeBestStreakDates(from: tempData)
@@ -571,7 +641,6 @@ struct HabitGitHubGrid: View {
         // Apply best streak flags
         let flaggedData: [[DayData]] = tempData.map { week in
             week.map { day in
-                guard day.date != Date.distantPast else { return day }
                 let normalized = calendar.startOfDay(for: day.date)
                 if bestStreakDates.contains(normalized) {
                     return DayData(
@@ -610,44 +679,90 @@ struct HabitGitHubGrid: View {
         let calendar = Calendar.current
         
         // Flatten to chronological order by date
-        var days: [DayData] = data.flatMap { $0 }
-            .filter { $0.date != Date.distantPast && !$0.isFuture } // ignore placeholders and future
+        let allDays: [DayData] = data.flatMap { $0 }
+            .filter { !$0.isFuture && $0.isActive } // only non-future active days
             .sorted { $0.date < $1.date }
         
-        var bestStartIndex: Int? = nil
-        var bestLength = 0
+        var bestStreakDates: [Date] = []
+        var currentStreakDates: [Date] = []
         
-        var currentStartIndex: Int? = nil
-        var currentLength = 0
-        
-        for (idx, day) in days.enumerated() {
-            // Only count streak on active and completed days
-            if day.isActive && day.isCompleted {
-                if currentStartIndex == nil {
-                    currentStartIndex = idx
-                    currentLength = 1
+        for day in allDays {
+            let dayDate = calendar.startOfDay(for: day.date)
+            
+            if day.isCompleted {
+                // Check if this day continues the current streak
+                if let lastDate = currentStreakDates.last {
+                    // Calculate expected next date (yesterday + 1 day)
+                    if let expectedDate = calendar.date(byAdding: .day, value: 1, to: lastDate),
+                       calendar.isDate(expectedDate, inSameDayAs: dayDate) {
+                        // Consecutive day - add to current streak
+                        currentStreakDates.append(dayDate)
+                    } else {
+                        // Gap in streak - check if current is better than best
+                        if currentStreakDates.count > bestStreakDates.count {
+                            bestStreakDates = currentStreakDates
+                        }
+                        // Start new streak
+                        currentStreakDates = [dayDate]
+                    }
                 } else {
-                    currentLength += 1
-                }
-                
-                if currentLength > bestLength {
-                    bestLength = currentLength
-                    bestStartIndex = currentStartIndex
+                    // Start new streak
+                    currentStreakDates = [dayDate]
                 }
             } else {
-                // Break streak
-                currentStartIndex = nil
-                currentLength = 0
+                // Day not completed - check if current streak is better than best
+                if currentStreakDates.count > bestStreakDates.count {
+                    bestStreakDates = currentStreakDates
+                }
+                // Reset current streak
+                currentStreakDates = []
             }
         }
         
-        guard bestLength > 0, let start = bestStartIndex else {
-            return []
+        // Final check in case the best streak goes to the end
+        if currentStreakDates.count > bestStreakDates.count {
+            bestStreakDates = currentStreakDates
         }
         
-        let bestSlice = days[start..<(start + bestLength)]
-        let normalizedSet = Set(bestSlice.map { Calendar.current.startOfDay(for: $0.date) })
-        return normalizedSet
+        return Set(bestStreakDates)
+    }
+    
+    
+    // Helper: calculate streak connections for a day
+    private func getStreakConnection(for dayData: DayData, at weekIndex: Int, dayIndex: Int, in data: [[DayData]]) -> GitHubSquare.StreakConnection {
+        // Removed - no longer used
+        return GitHubSquare.StreakConnection(connectsLeft: false, connectsRight: false, connectsUp: false, connectsDown: false)
+    }
+    
+    // Local darker color helper: create a darker version of the habit color
+    private func darkerColor(for base: Color) -> Color {
+        // Convert to UIColor
+        let ui = UIColor(base)
+        var h: CGFloat = 0
+        var s: CGFloat = 0
+        var b: CGFloat = 0
+        var a: CGFloat = 0
+        
+        if ui.getHue(&h, saturation: &s, brightness: &b, alpha: &a) {
+            // Reduce brightness by 30% to make it darker
+            let darkerB = max(0.0, b * 0.7)
+            // Optionally increase saturation slightly for more vibrancy
+            let adjustedS = min(1.0, s * 1.1)
+            let darker = UIColor(hue: h, saturation: adjustedS, brightness: darkerB, alpha: a)
+            return Color(darker)
+        }
+        
+        // Fallback: reduce RGB values by 30%
+        var r: CGFloat = 0
+        var g: CGFloat = 0
+        var bl: CGFloat = 0
+        if ui.getRed(&r, green: &g, blue: &bl, alpha: &a) {
+            let darker = UIColor(red: r * 0.7, green: g * 0.7, blue: bl * 0.7, alpha: a)
+            return Color(darker)
+        }
+        
+        // Final fallback
+        return base
     }
     
     // Local opposite color helper: complementary hue (rotate hue by 180°), preserve saturation/brightness/alpha
@@ -765,6 +880,24 @@ struct HabitGitHubGrid: View {
             }.reduce(0) { $0 + Int($1.quantity) }
         }
     }
+    
+    // MARK: - Helper methods for HabitIconView
+    
+    private func getCurrentStreak() -> Int {
+        return habit.calculateStreak(upTo: Date())
+    }
+    
+    private func getHabitIntensity() -> Int16 {
+        return habit.intensityLevel
+    }
+    
+    private func getDurationMinutes() -> Int16? {
+        if let pattern = habit.repeatPattern?.allObjects.first as? RepeatPattern,
+           pattern.duration > 0 {
+            return Int16(pattern.duration)
+        }
+        return nil
+    }
 }
 
 // MARK: - GitHub Square Component with Tooltip
@@ -777,9 +910,19 @@ struct GitHubSquare: View {
     
     @State private var showTooltip = false
     
+    struct StreakConnection {
+        let connectsLeft: Bool
+        let connectsRight: Bool
+        let connectsUp: Bool
+        let connectsDown: Bool
+    }
+    
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 3)
+            // Base square - use different corner radius based on best streak status
+            let cornerRadius: CGFloat = data.isInBestStreak ? 3 : 5
+            
+            RoundedRectangle(cornerRadius: cornerRadius)
                 .fill(color)
                 .frame(width: 12, height: 12)
                 .scaleEffect(animate ? 1.0 : 0.1)
@@ -789,9 +932,10 @@ struct GitHubSquare: View {
                     value: animate
                 )
             
+            // Today indicator
             if isToday {
-                RoundedRectangle(cornerRadius: 3)
-                    .stroke(Color.primary, lineWidth: 1.5)
+                RoundedRectangle(cornerRadius: data.isInBestStreak ? 3 : 5)
+                    .stroke(Color.secondary, lineWidth: 1.5)
                     .frame(width: 12, height: 12)
                     .scaleEffect(animate ? 1.0 : 0.1)
                     .animation(
@@ -888,3 +1032,5 @@ struct GitHubSquare: View {
         return 0
     }
 }
+
+

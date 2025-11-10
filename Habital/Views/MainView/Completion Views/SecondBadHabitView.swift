@@ -38,7 +38,6 @@ struct BadHabitButton: View {
     @State private var shakeEffect: Bool = false
     @State private var hasInitialized: Bool = false
     @State private var streakScale: CGFloat = 1.0
-    @State private var streakPulse: Bool = false
     
     // Computed property for streak size
     private var streakFontSize: CGFloat {
@@ -66,10 +65,9 @@ struct BadHabitButton: View {
             if newValue {
                 // Animate to broken state (bad) - only shake when CHANGING from good to bad
                 if !oldValue && newValue {
-                    // Fade out success ring and streak glow
+                    // Fade out success ring
                     withAnimation(Animation.easeOut(duration: 0.3)) {
                         successRingOpacity = 0
-                        //streakGlowOpacity = 0
                     }
                     
                     // Fill failure ring with red counter-clockwise
@@ -95,7 +93,6 @@ struct BadHabitButton: View {
                 } else {
                     // Already broken state, just update without shaking
                     successRingOpacity = 0
-                    //streakGlowOpacity = 0
                     failureRingTrim = 1.0
                     crossOpacity = 1
                     crossTrim = 1
@@ -206,46 +203,7 @@ struct BadHabitButton: View {
                     .frame(width: 16, height: 16)
                     .opacity(crossOpacity)
                 
-                // Enhanced streak counter (only show when streak > 0 AND not broken)
-                if streakCount > 0 && !isBroken {
-                    ZStack {
-                        // Add subtle background highlight for the streak number
-                        Circle()
-                            .fill(successColor.opacity(0.15))
-                            .frame(width: 28, height: 28)
-                        
-                        // Add a subtle inner circle for depth
-                        Circle()
-                            .stroke(successColor.opacity(0.3), lineWidth: 1)
-                            .frame(width: 22, height: 22)
-                        
-                        // The streak number itself
-                        Text("\(streakCount)")
-                            .font(.system(size: streakFontSize, weight: .bold))
-                            .foregroundColor(successColor)
-                            .minimumScaleFactor(0.5)
-                            .scaleEffect(streakScale)
-                    }
-                    .opacity(successRingOpacity)
-                    
-                    // Add subtle glow effect around the circle for higher streaks
-                    if streakCount >= 5 {
-                        Circle()
-                            .fill(successColor.opacity(0.2))
-                            .frame(width: streakCount >= 10 ? 40 : 36, height: streakCount >= 10 ? 40 : 36)
-                            //.blur(radius: 4)
-                            .opacity(successRingOpacity)
-                            .scaleEffect(streakPulse ? 1.05 : 1.0)
-                            .animation(
-                                Animation.easeInOut(duration: 1.5)
-                                    .repeatForever(autoreverses: true),
-                                value: streakPulse
-                            )
-                            .onAppear {
-                                streakPulse = true
-                            }
-                    }
-                }
+
             }
             .scaleEffect(scale)
             .modifier(ShakeEffect(animatableData: shakeEffect ? 1 : 0))
@@ -261,11 +219,6 @@ struct BadHabitButton: View {
                 crossTrim = isBroken ? 1.0 : 0.0
                 crossOpacity = isBroken ? 1.0 : 0.0
                 hasInitialized = true
-                
-                // Start gentle pulsing for higher streaks
-                if streakCount >= 5 && !isBroken {
-                    streakPulse = true
-                }
             }
         }
         .onChange(of: isBroken) { oldValue, newValue in
@@ -320,12 +273,6 @@ struct BadHabitButton: View {
                         }
                     }
                 }
-            }
-        }
-        // Update pulsing effect when streak changes
-        .onChange(of: streakCount) { oldValue, newValue in
-            if newValue >= 5 && !isBroken && !streakPulse {
-                streakPulse = true
             }
         }
     }

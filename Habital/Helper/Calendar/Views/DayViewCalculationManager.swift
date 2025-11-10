@@ -16,8 +16,7 @@ class DayViewCalculationManager: ObservableObject {
     private var calculationCache: [String: DayCalculationResult] = [:]
     private var pendingCalculations: Set<String> = []
     
-    // Background queue for calculations
-    private let calculationQueue = DispatchQueue(label: "dayview.calculations", qos: .userInitiated, attributes: .concurrent)
+
     
     struct DayCalculationResult {
         let hasActiveHabits: Bool
@@ -73,13 +72,8 @@ class DayViewCalculationManager: ObservableObject {
     }
     
     private func calculateOnBackground(date: Date, habits: [Habit]) async -> DayCalculationResult {
-        // Perform heavy calculations on background queue
-        return await withCheckedContinuation { continuation in
-            calculationQueue.async {
-                let result = self.performCalculation(date: date, habits: habits)
-                continuation.resume(returning: result)
-            }
-        }
+        // Perform calculations - already on appropriate executor via Swift Concurrency
+        return performCalculation(date: date, habits: habits)
     }
     
     private func performCalculation(date: Date, habits: [Habit]) -> DayCalculationResult {

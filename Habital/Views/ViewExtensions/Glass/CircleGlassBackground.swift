@@ -432,3 +432,21 @@ struct GlassCircleBackgroundPreview: View {
 #Preview {
     GlassCircleBackgroundPreview()
 }
+
+extension View {
+    @ViewBuilder
+    func glassButton() -> some View {
+        if #available(iOS 26.0, *) {
+            self
+                .buttonStyle(.glassProminent)
+                .tint(.clear)
+                
+        } else {
+            // Fallback style for iOS < 17
+            self
+                .buttonStyle(.borderedProminent)
+                .tint(.clear)
+                
+        }
+    }
+}

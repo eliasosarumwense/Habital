@@ -35,13 +35,6 @@ struct HabitIconView: View {
     // Environment values
     @Environment(\.colorScheme) private var colorScheme
     
-    @State private var flipAngle: Double = 0          // 0 → 180 → 360
-    @State private var showingBack: Bool = false      // which face is visible
-    private let baseFlipDuration: Double = 0.55       // base, we scale this per milestone
-
-    @State private var milestoneToFlip: Int? = nil
-    @State private var shimmerActive: Bool = false
-    
     // Removed pulse animation for better performance
     
     // Initialize with default values for new parameters
@@ -172,7 +165,12 @@ struct HabitIconView: View {
         case "habit":
             return habitColor
         case "primary":
-            return colorScheme == .dark ? (iconBackgroundColorType == "primary" ? Color(.darkGray) : .white) : .white
+            if colorScheme == .dark {
+                // Make icons a bit darker in dark mode
+                return iconBackgroundColorType == "primary" ? Color(.darkGray) : .white.opacity(0.85)
+            } else {
+                return .white
+            }
         default:
             return habitColor
         }
@@ -196,27 +194,26 @@ struct HabitIconView: View {
     
     var body: some View {
         ZStack {
-            // FRONT
-                    frontFace
-                        .opacity(showingBack ? 0 : 1)
-                        .rotation3DEffect(.degrees(flipAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
-
-            milestoneBackFace
-                .opacity(showingBack ? 1 : 0)
-                .rotation3DEffect(.degrees(flipAngle + 180), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
+            // Main icon content (no longer flips)
+            frontFace
+            
+            // Enhanced streak badge (this will flip)
+            if showStreaks && streak > 0 && !isFutureDate {
+                enhancedStreakBadge
+            }
         }
         .animation(.smooth(duration: 0.4), value: isActive)
         .animation(.smooth(duration: 0.4), value: habitColor)
         .animation(.smooth(duration: 0.6), value: streak)
         .onChange(of: streak) { oldValue, newValue in
-            // Flip when we *increase* across a tens boundary (…9 → …0), up to 100
+            // Trigger celebration when we *increase* across a tens boundary (…9 → …0), up to 100
             let crossedUpAMultipleOf10 =
                 newValue > oldValue &&
                 newValue % 10 == 0 &&
                 (newValue / 10) > (oldValue / 10)
 
             if crossedUpAMultipleOf10 && newValue <= 100 {
-                flipToMilestoneAndBack(newValue)    // e.g. show "20", "30", …, "100"
+                triggerStreakCelebration()    // e.g. celebrate "20", "30", …, "100"
             } else if newValue % 10 == 0 && newValue > oldValue && newValue >= 10 {
                 // keep your existing haptics on other milestones (e.g. > 100)
                 triggerStreakCelebration()
@@ -314,7 +311,7 @@ struct HabitIconView: View {
                 // Removed shadow for better performance
                 .scaleEffect(1.0) // Static scale for performance
             
-            // Icon content
+            // Icon content (behind the prohibition line)
             if let iconName = iconName, !iconName.isEmpty {
                 if iconName.count == 1 || (iconName.first?.isEmoji ?? false) {
                     // It's an emoji
@@ -332,7 +329,7 @@ struct HabitIconView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 22, height: 22)
-                        .foregroundColor(iconColor.opacity(0.8))
+                        .foregroundColor(iconColor.opacity(0.75)) // Slightly darker overall
                         .contentTransition(.symbolEffect(.replace))
                         .scaleEffect(streak >= 100 ? 1.05 : 1.0) // Slightly larger icon for elite streaks
                 }
@@ -341,36 +338,26 @@ struct HabitIconView: View {
                 defaultIcon
             }
             
-            // Intensity indicator (only show if enabled in settings AND intensity is higher than light)
-            if showIntensityIndicator && intensityLevel >= 1 && !isBadHabit {
-                intensityIndicator
+            // Bad habit prohibition indicator (appears IN FRONT of icon)
+            if isBadHabit {
+                ProhibitionSymbolView(
+                    isActive: isActive,
+                    iconSize: 41 // Match the base circle size
+                )
+                .accessibilityLabel("Bad habit")
+                .accessibilityAddTraits(.isImage)
             }
             
-            // Bad habit indicator
-            if isBadHabit {
-                ZStack {
-                    Circle()
-                        .fill(Color(UIColor.systemBackground))
-                        .frame(width: 12, height: 12)
-                    
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(isActive ? .red : .red.opacity(0.4))
-                        .font(.system(size: 12))
-                        .contentTransition(.symbolEffect(.replace))
-                }
-                .offset(x: 15, y: -15)
-                .transition(.scale.combined(with: .opacity))
+            // Intensity indicator (only show if enabled in settings AND intensity is higher than light)
+            // This appears LAST so it's in front of everything else
+            if showIntensityIndicator && intensityLevel >= 1 {
+                intensityIndicator
             }
             
             // Duration display on left bottom
             if let duration = durationText {
                 durationDisplay(duration)
                     .offset(x: -15, y: 15)
-            }
-            
-            // Enhanced streak badge
-            if showStreaks && streak > 0 && !isFutureDate {
-                enhancedStreakBadge
             }
         }
         /*
@@ -385,237 +372,22 @@ struct HabitIconView: View {
         }
          */
     }
-    
-    private var milestoneBackFace: some View {
-        ZStack {
-            // Base circle (match the front silhouette)
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            backgroundColor.opacity(isBadHabit ? 0.4 : 0.6),
-                            backgroundColor.opacity(isBadHabit ? 0.7 : 0.4)
-                        ],
-                        startPoint: isBadHabit ? .topLeading : .bottomTrailing,
-                        endPoint:   isBadHabit ? .bottomTrailing : .topLeading
-                    )
-                )
-                .frame(width: 41, height: 41)
-                .overlay(
-                    Circle()
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [
-                                    backgroundColor.opacity(0.1),
-                                    backgroundColor.opacity(0.4),
-                                    backgroundColor.opacity(0.1)
-                                ],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1
-                        )
-                )
 
-            // Dynamic milestone text (10, 20, ..., 100) with shimmer
-            let value = milestoneToFlip ?? 10
-            ShimmerNumber(
-                value: value,
-                baseColor: habitColor,
-                active: shimmerActive,
-                duration: shimmerDuration(for: value),
-                isTripleDigit: value >= 100
-            )
-        }
-    }
-    
-    
-    
-    private func flipToMilestoneAndBack(_ milestone: Int) {
-        guard !showingBack else { return }
-
-        milestoneToFlip = milestone
-
-        // haptic
-        let generator = UIImpactFeedbackGenerator(style: .rigid)
-        generator.impactOccurred(intensity: 1.0)
-
-        let dur   = dynamicFlipDuration(for: milestone)
-        let hold  = dynamicHold(for: milestone)
-        let curve = Animation.timingCurve(0.2, 0.8, 0.2, 1.0, duration: dur)
-
-        // reset shimmer trigger so .onChange fires
-        shimmerActive = false
-
-        // Flip to back (0 → 180)
-        withAnimation(curve) {
-            showingBack = true
-            flipAngle   = 180
-        }
-
-        // Start shimmer just after the back face becomes visible
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
-            shimmerActive = true
-        }
-
-        // Hold briefly showing the milestone (scaled with milestone)
-        DispatchQueue.main.asyncAfter(deadline: .now() + dur + hold) {
-            withAnimation(curve) {
-                showingBack = false
-                flipAngle   = 360
-            }
-            // normalize and stop shimmer
-            DispatchQueue.main.asyncAfter(deadline: .now() + dur) {
-                flipAngle = 0
-                milestoneToFlip = nil
-                shimmerActive = false
-            }
-        }
-    }
-    
-    private struct ShimmerNumber: View {
-        let value: Int
-        let baseColor: Color
-        let active: Bool
-        let duration: Double
-        let isTripleDigit: Bool
-
-        @State private var phase: CGFloat = -1.0
-
-        var body: some View {
-            // Base styled text
-            let text = Text("\(value)")
-                //.font(.system(size: isTripleDigit ? 16 : 18, weight: .black, design: .rounded))
-                //.customFont("Lexend", .black, (isTripleDigit ? 17 : 19))
-                .monospacedDigit()
-                .kerning(isTripleDigit ? 0.0 : 0.3)
-                .minimumScaleFactor(0.7)
-                .lineLimit(1)
-                .foregroundStyle(.white.opacity(0.6))
-
-            // Shimmer overlay band
-            text
-                .overlay(
-                    ZStack {
-                        if active {
-                            // A narrow bright band that sweeps across
-                            LinearGradient(
-                                colors: [
-                                    .white.opacity(0.0),
-                                    .white.opacity(0.9),
-                                    .white.opacity(0.0)
-                                ],
-                                startPoint: .leading, endPoint: .trailing
-                            )
-                            .frame(width: 60, height: isTripleDigit ? 26 : 24)
-                            .rotationEffect(.degrees(20))
-                            .offset(x: -55 + phase * 130)   // sweep L → R
-                            .blendMode(.plusLighter)
-                        }
-                    }
-                    .mask(text) // only light up the glyphs
-                )
-                // subtle glow that scales with the milestone
-                .shadow(color: baseColor.opacity(0.25), radius: active ? 3 : 0, x: 0, y: 0)
-                .onChange(of: active) { _, nowActive in
-                    guard nowActive else { return }
-                    phase = -1.0
-                    withAnimation(.linear(duration: duration)) {
-                        phase = 1.0
-                    }
-                }
-                .accessibilityLabel("Streak \(value)")
-        }
-    }
-    
-    // MARK: - Flip/Shimmer Timing
-
-    /// 0.1 at 10 → 1.0 at 100 (clamped)
-    private func milestoneProgress(_ m: Int) -> Double {
-        let p = max(10, min(100, m))
-        return (Double(p) - 10.0) / 90.0
-    }
-
-    /// Flip grows from ~0.55s → ~1.05s (tweak the +0.5 multiplier to taste)
-    private func dynamicFlipDuration(for milestone: Int) -> Double {
-        baseFlipDuration + 0.50 * milestoneProgress(milestone)
-    }
-
-    /// Back-face hold grows from 0.20s → 0.45s
-    private func dynamicHold(for milestone: Int) -> Double {
-        0.50 + 0.25 * milestoneProgress(milestone)
-    }
-
-    /// Shimmer sweep grows from 0.80s → 1.80s
-    private func shimmerDuration(for milestone: Int) -> Double {
-        0.80 + 1.00 * milestoneProgress(milestone)
-    }
     // MARK: - Enhanced Streak Badge
     
     private var enhancedStreakBadge: some View {
         ZStack {
-            if useModernBadges {
+            
                 Circle()
                     .fill(.ultraThinMaterial)
-                    .frame(width: streak >= 50 ? 16 : 14, height: streak >= 50 ? 16 : 14) // Larger for high streaks
-                    .background(
-                        Circle()
-                            .fill(
-                                RadialGradient(
-                                    gradient: Gradient(colors: [
-                                        habitColor.opacity(streak >= 20 ? 0.18 : 0.1),
-                                        Color.clear
-                                    ]),
-                                    center: .center,
-                                    startRadius: streak >= 50 ? 8 : 7,
-                                    endRadius: streak >= 50 ? 12 : 10
-                                )
-                            )
-                            .frame(width: streak >= 50 ? 20 : 18, height: streak >= 50 ? 20 : 18)
-                    )
-                    .overlay(
-                        // Enhanced border for high streaks
-                        Circle()
-                            .stroke(
-                                habitColor.opacity(streak >= 50 ? 0.3 : (streak >= 30 ? 0.2 : 0.1)),
-                                lineWidth: streak >= 75 ? 1.2 : (streak >= 50 ? 1 : 0.5)
-                            )
-                            .frame(width: streak >= 50 ? 16 : 14, height: streak >= 50 ? 16 : 14)
-                    )
-                
-                Text("\(streak)")
-                    //.customFont("Lexend", .medium, (streak >= 100 ? 7 : (streak >= 10 ? 8 : 9)))
-                    .font(.custom("Lexend-Medium", size: 9))
+                    .frame(width: streak >= 100 ? 16 : 14, height: streak >= 100 ? 16 : 14) // Larger for high streaks
                     
-                    .foregroundColor(isActive ? .primary : .gray)
-                    .contentTransition(.numericText(value: Double(streak)))
-                    .animation(.smooth(duration: 0.6), value: streak)
-            } else {
-                Circle()
-                    .fill(habitColor)
-                    .frame(width: streak >= 50 ? 18 : 16, height: streak >= 50 ? 18 : 16) // Larger for high streaks
-                    .background(
-                        Circle()
-                            .fill(
-                                RadialGradient(
-                                    gradient: Gradient(colors: [
-                                        habitColor.opacity(0.1),
-                                        Color.clear
-                                    ]),
-                                    center: .center,
-                                    startRadius: streak >= 50 ? 9 : 8,
-                                    endRadius: streak >= 50 ? 13 : 11
-                                )
-                            )
-                            .frame(width: streak >= 50 ? 22 : 20, height: streak >= 50 ? 22 : 20)
-                    )
-                    // Removed shadow for better performance
-                
                 Text("\(streak)")
-                    .font(.system(size: streak >= 100 ? 9 : (streak >= 50 ? 11 : 10), weight: .bold))
-                    .foregroundColor(.white)
+                    .font(.customFont("Lexend", .bold, streak >= 100 ? 7 : (streak >= 50 ? 8 : 9)))
+                    .foregroundColor(isActive ? .primary.opacity(0.85) : .gray)
                     .contentTransition(.numericText(value: Double(streak)))
-                    .animation(.smooth(duration: 0.6), value: streak)
-            }
+                    .animation(.easeInOut(duration: 0.6), value: streak)
+            
         }
         .offset(x: 15, y: 15)
         .transition(.scale.combined(with: .opacity))
@@ -623,6 +395,7 @@ struct HabitIconView: View {
         .scaleEffect(1.0) // Static scale for performance
     }
     
+
     private func triggerStreakCelebration() {
         // Enhanced haptic feedback based on milestone
         let impactStyle: UIImpactFeedbackGenerator.FeedbackStyle = streak >= 50 ? .heavy : (streak >= 20 ? .medium : .light)
@@ -638,7 +411,7 @@ struct HabitIconView: View {
     // Duration display component
     private func durationDisplay(_ duration: String) -> some View {
         Text(duration)
-            .font(.custom("Lexend-Medium", size: 8))
+            .font(.system(size: 8, weight: .medium))
             .foregroundColor(.primary.opacity(0.6))
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
@@ -769,6 +542,69 @@ struct HabitIconView: View {
     }
 }
 
+// MARK: - Prohibition Symbol View
+
+struct ProhibitionSymbolView: View {
+    let isActive: Bool
+    let iconSize: CGFloat
+    
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var drawProgress: CGFloat = 0
+    
+    // Design constants based on icon size
+    private var ringStrokeWidth: CGFloat {
+        iconSize * 0.08 // 8% of icon size (reduced from 12%)
+    }
+    
+    private var slashStrokeWidth: CGFloat {
+        ringStrokeWidth // Match ring width
+    }
+    
+    private var innerMargin: CGFloat {
+        0 // No inner margin - ring at the exact edge
+    }
+    
+    private var prohibitionRingSize: CGFloat {
+        iconSize - (innerMargin * 2)
+    }
+    
+    private var slashLength: CGFloat {
+        prohibitionRingSize * 0.7 // Diagonal length inside the ring
+    }
+    
+    // Minimal black color for the prohibition slash
+    private var prohibitionColor: Color {
+        Color.black.opacity(0.6) // Black in both light and dark mode
+    }
+    
+    var body: some View {
+        ZStack {
+            // Diagonal slash (45° from top-right to bottom-left) - draws from bottom-left to top-right
+            Capsule()
+                .trim(from: 0, to: drawProgress)
+                .stroke(prohibitionColor, lineWidth: slashStrokeWidth)
+                .frame(width: slashLength, height: slashStrokeWidth)
+                .rotationEffect(.degrees(45)) // 45° rotation - no wiggle
+                .opacity(isActive ? 1.0 : 0.5) // Clearer visibility
+        }
+        .scaleEffect(isActive ? 1.0 : 0.9)
+        .opacity(isActive ? 1.0 : 0.6)
+        .onAppear {
+            // Animate the line drawing from bottom-left to top-right (slower)
+            withAnimation(.easeOut(duration: 0.5)) {
+                drawProgress = 1.0
+            }
+        }
+        .onChange(of: isActive) { _, newValue in
+            // Animate the drawing progress when active state changes
+            withAnimation(.easeInOut(duration: 0.4)) {
+                drawProgress = newValue ? 1.0 : 0.0
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: isActive)
+    }
+}
+
 // MARK: - Previews
 
 struct HabitIconView_Previews: PreviewProvider {
@@ -836,6 +672,43 @@ struct HabitIconView_Previews: PreviewProvider {
                         isFutureDate: false,
                         intensityLevel: 4,
                         durationMinutes: 90
+                    )
+                }
+            }
+            
+            Divider()
+            
+            Text("Bad Habits with Prohibition Design")
+                .font(.subheadline)
+            
+            HStack(spacing: 15) {
+                VStack {
+                    Text("Active")
+                    HabitIconView(
+                        iconName: "cigarette.fill",
+                        isActive: true,
+                        habitColor: .red,
+                        streak: 15,
+                        showStreaks: true,
+                        useModernBadges: true,
+                        isFutureDate: false,
+                        isBadHabit: true,
+                        intensityLevel: 2
+                    )
+                }
+                
+                VStack {
+                    Text("Inactive")
+                    HabitIconView(
+                        iconName: "wineglass.fill",
+                        isActive: false,
+                        habitColor: .red,
+                        streak: 8,
+                        showStreaks: true,
+                        useModernBadges: true,
+                        isFutureDate: false,
+                        isBadHabit: true,
+                        intensityLevel: 1
                     )
                 }
             }

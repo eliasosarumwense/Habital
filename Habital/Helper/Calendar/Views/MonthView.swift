@@ -18,6 +18,8 @@ struct MonthView: View {
     @Binding var focused: Week
     @Binding var selectedDate: Date?
     
+    @ObservedObject var toggleManager: HabitToggleManager
+    
     let isShownInHabitDetails: Bool?
     let habitColor: Color?
     
@@ -32,6 +34,7 @@ struct MonthView: View {
                     getFilteredHabits: getFilteredHabits,
                     animateRings: animateRings,
                     isDragging: $isDragging,
+                    toggleManager: toggleManager,
                     refreshTrigger: refreshTrigger, // Pass the refresh trigger
                     isShownInHabitDetails: isShownInHabitDetails,
                     habitColor: habitColor

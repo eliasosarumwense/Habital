@@ -15,6 +15,7 @@
         <attribute name="skipped" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="tracksTime" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <relationship name="habit" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Habit" inverseName="completion" inverseEntity="Habit"/>
+        <relationship name="trigger" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Trigger" inverseName="completion" inverseEntity="Trigger"/>
     </entity>
     <entity name="DailyGoal" representedClassName="DailyGoal" syncable="YES" codeGenerationType="class">
         <attribute name="daysInterval" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
@@ -110,6 +111,12 @@
         <attribute name="lastCompletedDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="longestCount" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="startDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="Trigger" representedClassName="Trigger" syncable="YES" codeGenerationType="class">
+        <attribute name="icon" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <relationship name="completion" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Completion" inverseName="trigger" inverseEntity="Completion"/>
     </entity>
     <entity name="WeeklyGoal" representedClassName="WeeklyGoal" syncable="YES" codeGenerationType="class">
         <attribute name="everyWeek" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>

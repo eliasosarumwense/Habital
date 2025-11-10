@@ -10,7 +10,7 @@ import SwiftUI
 struct DailyHabitsView: View {
     
     let date: Date
-    let habits: [Habit] // This is already filtered by MainHabitsView based on the selected list
+    @Binding var habits: [Habit] // This is already filtered by MainHabitsView based on the selected list
     let isHabitActive: (Habit) -> Bool
     let isHabitCompleted: (Habit) -> Bool
     let toggleCompletion: (Habit) -> Void
@@ -41,6 +41,8 @@ struct DailyHabitsView: View {
     @AppStorage("showInactiveHabits") private var showInactiveHabits = true
     @AppStorage("groupCompletedHabits") private var groupCompletedHabits = false
     @AppStorage("accentColorIndex") private var accentColorIndex: Int = 0
+    
+    @State private var habitRefreshID = UUID()
     
     private var accentColor: Color {
         return ColorPalette.color(at: accentColorIndex)
@@ -364,7 +366,7 @@ struct DailyHabitsView: View {
                     
                     Color.clear.frame(height: 2)
                     
-                    ForEach(filteredHabits, id: \.objectID) { habit in
+                    ForEach(habits, id: \.objectID) { habit in
                         HabitRowView(
                             habit: habit,
                             isActive: isHabitActive(habit),
@@ -372,10 +374,9 @@ struct DailyHabitsView: View {
                             nextOccurrence: getNextOccurrenceText(habit),
                             toggleCompletion: {
                                 // PERFORMANCE FIX: Remove withAnimation wrapper and use debounced toggle
-                                debouncedToggle(habit: habit)
+                                //debouncedToggle(habit: habit)
+                                toggleCompletion(habit)
                                 
-                                let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                impact.impactOccurred()
                             },
                             editHabit: {
                                 selectedHabit = habit
